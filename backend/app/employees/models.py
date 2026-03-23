@@ -12,14 +12,18 @@ class Employee(Base):
     __tablename__ = "employees"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), unique=True, nullable=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), unique=True, nullable=True
+    )
 
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
     middle_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     position: Mapped[str] = mapped_column(String(200), nullable=False)
-    department_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("departments.id"), nullable=True)
+    department_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("departments.id"), nullable=True
+    )
 
     room_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
     internal_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -29,7 +33,9 @@ class Employee(Base):
     birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
-    manager_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("employees.id"), nullable=True)
+    manager_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("employees.id"), nullable=True
+    )
 
     vacation_start: Mapped[date | None] = mapped_column(Date, nullable=True)
     vacation_end: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -38,29 +44,44 @@ class Employee(Base):
     telegram_chat_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # =========================
+    # RELATIONSHIPS
+    # =========================
 
     user: Mapped["User | None"] = relationship("User", back_populates="employee")
+
     department: Mapped["Department | None"] = relationship(
         "Department",
-        back_populates="employees",
         foreign_keys=[department_id],
+        back_populates="employees",
     )
+
+    # ❗ ВАЖНО: убрали back_populates и указали primaryjoin
     headed_department: Mapped["Department | None"] = relationship(
         "Department",
-        back_populates="head",
-        foreign_keys="Department.head_id",
+        primaryjoin="Department.head_id == Employee.id",
+        viewonly=True,
         uselist=False,
     )
+
     manager: Mapped["Employee | None"] = relationship(
         "Employee",
         remote_side="Employee.id",
         back_populates="subordinates",
     )
+
     subordinates: Mapped[list["Employee"]] = relationship(
         "Employee",
         back_populates="manager",
     )
+
+    # =========================
+    # HELPERS
+    # =========================
 
     @property
     def full_name(self) -> str:

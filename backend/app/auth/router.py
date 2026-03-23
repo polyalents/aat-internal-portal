@@ -69,6 +69,11 @@ async def refresh(body: RefreshRequest, db: AsyncSession = Depends(get_db)) -> T
     )
 
 
-@router.get("/me", response_model=UserRead)
-async def me(current_user: User = Depends(get_current_user)) -> User:
-    return current_user
+@router.get("/me")
+async def get_me(current_user: User = Depends(get_current_user)):
+    return {
+        "id": str(current_user.id),
+        "username": current_user.username,
+        "email": current_user.email,
+        "role": current_user.role,
+    }
