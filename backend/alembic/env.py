@@ -7,15 +7,21 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from app.config import settings
 from app.database import Base
 
-# Импортируй модели сюда, когда создашь их:
-# from app.users.models import User
-# from app.employees.models import Employee
-# from app.departments.models import Department
-# from app.tickets.models import Ticket
-# from app.comments.models import Comment
-# from app.announcements.models import Announcement
-# from app.knowledge.models import KnowledgeArticle
-# from app.chat.models import ChatMessage
+# Импорт ВСЕХ моделей, чтобы Alembic видел их через Base.metadata
+from app.admin.models import SystemSettings  # noqa: F401
+from app.announcements.models import Announcement  # noqa: F401
+from app.chat.models import ChatMessage  # noqa: F401
+from app.departments.models import Department  # noqa: F401
+from app.employees.models import Employee  # noqa: F401
+from app.knowledge.models import KnowledgeArticle, KnowledgeCategory  # noqa: F401
+from app.tickets.models import (  # noqa: F401
+    Ticket,
+    TicketAttachment,
+    TicketCategory,
+    TicketComment,
+    TicketHistory,
+)
+from app.users.models import User  # noqa: F401
 
 config = context.config
 
@@ -38,7 +44,7 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-def do_run_migrations(connection):
+def do_run_migrations(connection) -> None:
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
