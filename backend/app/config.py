@@ -8,6 +8,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    app_name: str = "AAT Internal Portal"
     app_env: str = "development"
     debug: bool = True
 
@@ -15,13 +16,13 @@ class Settings(BaseSettings):
     api_url: str = "https://portal.aat.local/api"
     frontend_url: str = "https://portal.aat.local"
 
-    database_url: str = "postgresql+asyncpg://portal:portal_dev_password@localhost:5432/portal_db"
-    redis_url: str = "redis://localhost:6379/0"
+    database_url: str = "postgresql+asyncpg://aat_user:change_me@127.0.0.1:5432/aat_portal"
+    redis_url: str = "redis://127.0.0.1:6379/0"
 
-    jwt_secret: str = "CHANGE_ME"
-    jwt_access_token_expire_minutes: int = 30
-    jwt_refresh_token_expire_days: int = 7
+    secret_key: str = "CHANGE_ME"
     jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = 7
 
     smtp_host: str = ""
     smtp_port: int = 587
@@ -34,7 +35,7 @@ class Settings(BaseSettings):
     telegram_chat_id: str = ""
 
     max_upload_size_mb: int = 10
-    upload_dir: str = "/app/uploads"
+    upload_dir: str = "./uploads"
 
     escalation_timeout_minutes: int = 5
 
@@ -42,7 +43,7 @@ class Settings(BaseSettings):
 
     admin_username: str = "admin"
     admin_password: str = "admin"
-    admin_email: str = "admin@aat.local"
+    admin_email: str = "admin@test.com"
 
     @property
     def cors_origins_list(self) -> list[str]:

@@ -5,6 +5,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.exceptions import register_exception_handlers
+from app.middleware.rate_limit import RateLimitMiddleware
 
 
 @asynccontextmanager
@@ -19,9 +21,9 @@ def create_app() -> FastAPI:
         docs_url="/api/docs",
         openapi_url="/api/openapi.json",
         lifespan=lifespan,
-        debug=settings.debug,
     )
 
+    app.add_middleware(RateLimitMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
@@ -30,9 +32,13 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    register_exception_handlers(app)
+
+    from app.admin.router import router as admin_router
     from app.announcements.router import router as announcements_router
     from app.auth.router import router as auth_router
     from app.chat.router import router as chat_router
+    from app.dashboard.router import router as dashboard_router
     from app.departments.router import router as departments_router
     from app.employees.router import router as employees_router
     from app.knowledge.router import router as knowledge_router
@@ -49,8 +55,10 @@ def create_app() -> FastAPI:
     app.include_router(announcements_router, prefix="/api/announcements", tags=["announcements"])
     app.include_router(knowledge_router, prefix="/api/knowledge", tags=["knowledge"])
     app.include_router(chat_router, prefix="/api/chat", tags=["chat"])
+    app.include_router(admin_router, prefix="/api/admin", tags=["admin"])
+    app.include_router(dashboard_router, prefix="/api/dashboard", tags=["dashboard"])
 
-    @app.get("/api/health")
+    @app.get("/api/health", tags=["health"])
     async def health_check() -> dict[str, str]:
         return {"status": "ok"}
 
