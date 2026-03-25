@@ -80,7 +80,7 @@ nginx/ssl/*.crt
 nginx/ssl/*.pem
 
 # ============================================
-# Upload files (keep code, ignore real uploaded files)
+# Upload files
 # ============================================
 backend/app/uploads/*
 !backend/app/uploads/__init__.py
@@ -92,6 +92,12 @@ backend/app/uploads/*
 # ============================================
 *.log
 logs/
+
+# ============================================
+# Celery
+# ============================================
+celerybeat-schedule
+backend/celerybeat-schedule
 
 # ============================================
 # Alembic
