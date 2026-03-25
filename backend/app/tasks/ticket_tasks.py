@@ -25,6 +25,7 @@ from app.tasks.celery_app import celery_app
 from app.tickets.enums import TicketStatus
 from app.tickets.models import Ticket, TicketHistory
 from app.users.models import User, UserRole
+from app.departments.models import Department
 
 logger = logging.getLogger(__name__)
 

@@ -8,7 +8,10 @@ celery_app = Celery(
     "portal",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.tasks"],  # важно для автоподхвата
+    include=[
+        "app.tasks.ticket_tasks",
+        "app.tasks.notification_tasks",
+    ],
 )
 
 celery_app.conf.update(
