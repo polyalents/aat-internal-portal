@@ -28,7 +28,7 @@ async def get_category_by_id(db: AsyncSession, cat_id: UUID) -> TicketCategory |
 async def create_category(db: AsyncSession, name: str) -> TicketCategory:
     category = TicketCategory(name=name.strip())
     db.add(category)
-    await db.flush()
+    await db.commit()
     await db.refresh(category)
     return category
 
@@ -43,7 +43,8 @@ async def update_category(
         category.name = name.strip()
     if is_active is not None:
         category.is_active = is_active
-    await db.flush()
+
+    await db.commit()
     await db.refresh(category)
     return category
 
@@ -118,7 +119,7 @@ async def create_ticket(db: AsyncSession, data: TicketCreate, author: User) -> T
         contact_email=str(data.contact_email).lower() if data.contact_email else None,
     )
     db.add(ticket)
-    await db.flush()
+    await db.commit()
     await db.refresh(ticket)
     return ticket
 
@@ -179,7 +180,7 @@ async def update_ticket(
     for change in changes:
         db.add(change)
 
-    await db.flush()
+    await db.commit()
     await db.refresh(ticket)
     return ticket
 
@@ -187,7 +188,7 @@ async def update_ticket(
 async def add_comment(db: AsyncSession, ticket_id: UUID, author_id: UUID, text: str) -> TicketComment:
     comment = TicketComment(ticket_id=ticket_id, author_id=author_id, text=text.strip())
     db.add(comment)
-    await db.flush()
+    await db.commit()
     await db.refresh(comment)
     return comment
 

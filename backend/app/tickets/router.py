@@ -157,7 +157,10 @@ async def create_new_ticket(
     ticket = await create_ticket(db, body, current_user)
     ticket = await get_ticket_by_id(db, ticket.id)
     if ticket is None:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to reload ticket")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reload ticket",
+        )
     return _ticket_to_read(ticket)
 
 
@@ -179,7 +182,10 @@ async def update_existing_ticket(
 
     ticket = await get_ticket_by_id(db, ticket.id)
     if ticket is None:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to reload ticket")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reload ticket",
+        )
 
     return _ticket_to_read(ticket)
 
@@ -313,7 +319,7 @@ async def upload_attachment(
         content_type=file.content_type or "application/octet-stream",
     )
     db.add(attachment)
-    await db.flush()
+    await db.commit()
     await db.refresh(attachment)
 
     return attachment
