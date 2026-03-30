@@ -38,6 +38,8 @@ class TicketRead(BaseModel):
     assignee_name: str | None = None
     contact_phone: str | None
     contact_email: EmailStr | None
+    is_archived: bool = False
+    archived_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     escalated_at: datetime | None

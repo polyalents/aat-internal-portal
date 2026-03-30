@@ -21,8 +21,9 @@ def create_app() -> FastAPI:
         docs_url="/api/docs",
         openapi_url="/api/openapi.json",
         lifespan=lifespan,
+        redirect_slashes=False,
     )
-
+    
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(
         CORSMiddleware,

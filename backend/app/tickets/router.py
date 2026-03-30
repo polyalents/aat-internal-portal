@@ -25,8 +25,11 @@ from app.tickets.schemas import (
 )
 from app.tickets.service import (
     add_comment,
+    archive_ticket,
+    cleanup_old_tickets,
     create_category,
     create_ticket,
+    delete_ticket_permanently,
     get_categories,
     get_category_by_id,
     get_comments,
@@ -34,6 +37,7 @@ from app.tickets.service import (
     get_ticket_by_id,
     get_ticket_stats,
     get_tickets,
+    restore_ticket,
     update_category,
     update_ticket,
 )
@@ -60,6 +64,8 @@ def _ticket_to_read(ticket) -> TicketRead:
         assignee_name=ticket.assignee.username if ticket.assignee else None,
         contact_phone=ticket.contact_phone,
         contact_email=ticket.contact_email,
+        is_archived=ticket.is_archived,
+        archived_at=ticket.archived_at,
         created_at=ticket.created_at,
         updated_at=ticket.updated_at,
         escalated_at=ticket.escalated_at,
@@ -98,13 +104,14 @@ async def update_existing_category(
     return await update_category(db, category, name=body.name, is_active=body.is_active)
 
 
-@router.get("/", response_model=TicketListResponse)
+@router.get("", response_model=TicketListResponse)
 async def list_tickets(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     ticket_status: TicketStatus | None = Query(None, alias="status"),
     priority: TicketPriority | None = Query(None),
     search: str | None = Query(None, max_length=300),
+    archived: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> TicketListResponse:
@@ -118,6 +125,7 @@ async def list_tickets(
         priority=priority,
         author_id=author_id,
         search=search,
+        archived=archived,
     )
     items = [_ticket_to_read(ticket) for ticket in tickets]
     return TicketListResponse(items=items, total=total, page=page, size=size)
@@ -148,7 +156,7 @@ async def read_ticket(
     return _ticket_to_read(ticket)
 
 
-@router.post("/", response_model=TicketRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=TicketRead, status_code=status.HTTP_201_CREATED)
 async def create_new_ticket(
     body: TicketCreate,
     db: AsyncSession = Depends(get_db),
@@ -188,6 +196,68 @@ async def update_existing_ticket(
         )
 
     return _ticket_to_read(ticket)
+
+
+@router.post("/{ticket_id}/archive", response_model=TicketRead)
+async def archive_existing_ticket(
+    ticket_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_it),
+) -> TicketRead:
+    ticket = await get_ticket_by_id(db, ticket_id)
+    if ticket is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
+
+    if ticket.status not in (TicketStatus.completed, TicketStatus.rejected):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only completed or rejected tickets can be archived")
+
+    ticket = await archive_ticket(db, ticket, current_user)
+    return _ticket_to_read(ticket)
+
+
+@router.post("/{ticket_id}/restore", response_model=TicketRead)
+async def restore_existing_ticket(
+    ticket_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_it),
+) -> TicketRead:
+    ticket = await get_ticket_by_id(db, ticket_id)
+    if ticket is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
+
+    ticket = await restore_ticket(db, ticket, current_user)
+    return _ticket_to_read(ticket)
+
+
+@router.delete("/{ticket_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_ticket_permanently(
+    ticket_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    if current_user.role != UserRole.admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admin can delete tickets permanently")
+
+    ticket = await get_ticket_by_id(db, ticket_id)
+    if ticket is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
+
+    if not ticket.is_archived:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ticket must be archived before permanent deletion")
+
+    await delete_ticket_permanently(db, ticket)
+
+
+@router.post("/cleanup-old", status_code=status.HTTP_200_OK)
+async def cleanup_old_archived_tickets(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, int]:
+    if current_user.role != UserRole.admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admin can run cleanup")
+
+    deleted = await cleanup_old_tickets(db)
+    return {"deleted": deleted}
 
 
 @router.get("/{ticket_id}/comments", response_model=list[CommentRead])

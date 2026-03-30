@@ -130,6 +130,8 @@ export interface Ticket {
   updated_at: string
   escalated_at: string | null
   completed_at: string | null
+  is_archived: boolean
+  archived_at: string | null
 }
 
 export interface TicketCreate {

@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 
-import type { Ticket } from "@/shared/types"
+import type { Ticket, TicketComment, TicketHistory, TicketStatus } from "@/shared/types"
 import {
   PRIORITY_COLORS,
   PRIORITY_LABELS,
@@ -11,22 +11,61 @@ import {
   formatDateTime,
 } from "@/lib/utils"
 
-function getAuthHeaders(): HeadersInit {
-  const token = localStorage.getItem("access_token")
+import {
+  archiveTicket,
+  deleteTicketPermanently,
+  getTicket,
+  updateTicket,
+  getTicketComments,
+  addTicketComment,
+  getTicketHistory,
+  restoreTicket,
+} from "@/shared/api/tickets"
+import { useAuthStore } from "@/features/auth/store"
 
-  return {
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  }
+const ALLOWED_STATUS_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
+  new: ["in_progress", "waiting", "escalated", "completed", "rejected"],
+  in_progress: ["waiting", "escalated", "completed", "rejected"],
+  waiting: ["in_progress", "escalated", "completed", "rejected"],
+  escalated: ["in_progress", "waiting", "completed", "rejected"],
+  completed: [],
+  rejected: [],
 }
+
+const STATUS_OPTIONS: { value: TicketStatus; label: string }[] = [
+  { value: "new", label: "Новая" },
+  { value: "in_progress", label: "В работе" },
+  { value: "waiting", label: "Ожидание" },
+  { value: "escalated", label: "Эскалация" },
+  { value: "completed", label: "Завершено" },
+  { value: "rejected", label: "Отклонено" },
+]
 
 export default function TicketDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { user } = useAuthStore()
+
+  const isIT = user?.role === "it_specialist" || user?.role === "admin"
+  const isAdmin = user?.role === "admin"
 
   const [ticket, setTicket] = useState<Ticket | null>(null)
+  const [comments, setComments] = useState<TicketComment[]>([])
+  const [history, setHistory] = useState<TicketHistory[]>([])
+
+  const [newComment, setNewComment] = useState("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  const [statusUpdating, setStatusUpdating] = useState(false)
+  const [commentSending, setCommentSending] = useState(false)
+  const [archiveLoading, setArchiveLoading] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+
+  const availableNextStatuses = useMemo(() => {
+    if (!ticket) return []
+    return ALLOWED_STATUS_TRANSITIONS[ticket.status] ?? []
+  }, [ticket])
 
   useEffect(() => {
     if (!id) {
@@ -34,31 +73,122 @@ export default function TicketDetailPage() {
       return
     }
 
-    setLoading(true)
-    setError(null)
-
-    fetch(`/api/tickets/${id}`, {
-      method: "GET",
-      headers: getAuthHeaders(),
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const text = await res.text().catch(() => "")
-          throw new Error(`HTTP ${res.status}: ${text}`)
-        }
-        return res.json()
-      })
-      .then((data: Ticket) => {
-        setTicket(data)
-      })
-      .catch((err) => {
-        console.error("TICKET DETAIL ERROR:", err)
-        setError("Не удалось загрузить заявку")
-      })
-      .finally(() => {
-        setLoading(false)
-      })
+    void loadData()
   }, [id, navigate])
+
+  async function loadData() {
+    if (!id) return
+
+    try {
+      setLoading(true)
+      setError(null)
+
+      const [ticketData, commentsData, historyData] = await Promise.all([
+        getTicket(id),
+        getTicketComments(id),
+        getTicketHistory(id),
+      ])
+
+      setTicket(ticketData)
+      setComments(commentsData)
+      setHistory(historyData)
+    } catch (err) {
+      console.error("TICKET DETAIL ERROR:", err)
+      setError("Не удалось загрузить заявку")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleStatusChange(nextStatus: TicketStatus) {
+    if (!ticket || !isIT) return
+    if (nextStatus === ticket.status) return
+
+    try {
+      setStatusUpdating(true)
+      const updated = await updateTicket(ticket.id, { status: nextStatus })
+      setTicket(updated)
+
+      const freshHistory = await getTicketHistory(ticket.id)
+      setHistory(freshHistory)
+    } catch (err: any) {
+      console.error("STATUS UPDATE ERROR:", err)
+      const backendMessage = err?.response?.data?.detail || err?.message || "Ошибка смены статуса"
+      alert(String(backendMessage))
+    } finally {
+      setStatusUpdating(false)
+    }
+  }
+
+  async function handleAddComment() {
+    if (!id) return
+    const text = newComment.trim()
+    if (!text) return
+
+    try {
+      setCommentSending(true)
+      const comment = await addTicketComment(id, text)
+      setComments((prev) => [...prev, comment])
+      setNewComment("")
+    } catch (err: any) {
+      console.error("ADD COMMENT ERROR:", err)
+      const backendMessage = err?.response?.data?.detail || err?.message || "Ошибка добавления комментария"
+      alert(String(backendMessage))
+    } finally {
+      setCommentSending(false)
+    }
+  }
+
+  async function handleArchive() {
+    if (!ticket || !isIT) return
+    if (!confirm("Архивировать заявку?")) return
+
+    try {
+      setArchiveLoading(true)
+      const updated = await archiveTicket(ticket.id)
+      setTicket(updated)
+      const freshHistory = await getTicketHistory(ticket.id)
+      setHistory(freshHistory)
+    } catch (err: any) {
+      console.error("ARCHIVE ERROR:", err)
+      alert(String(err?.response?.data?.detail || "Не удалось архивировать заявку"))
+    } finally {
+      setArchiveLoading(false)
+    }
+  }
+
+  async function handleRestore() {
+    if (!ticket || !isIT) return
+
+    try {
+      setArchiveLoading(true)
+      const updated = await restoreTicket(ticket.id)
+      setTicket(updated)
+      const freshHistory = await getTicketHistory(ticket.id)
+      setHistory(freshHistory)
+    } catch (err: any) {
+      console.error("RESTORE ERROR:", err)
+      alert(String(err?.response?.data?.detail || "Не удалось восстановить заявку"))
+    } finally {
+      setArchiveLoading(false)
+    }
+  }
+
+  async function handleDeletePermanently() {
+    if (!ticket || !isAdmin) return
+    if (!confirm("Удалить заявку навсегда? Это действие необратимо.")) return
+
+    try {
+      setDeleteLoading(true)
+      await deleteTicketPermanently(ticket.id)
+      navigate("/tickets")
+    } catch (err: any) {
+      console.error("DELETE ERROR:", err)
+      alert(String(err?.response?.data?.detail || "Не удалось удалить заявку"))
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -90,46 +220,110 @@ export default function TicketDetailPage() {
     )
   }
 
+  const canArchive = isIT && !ticket.is_archived && ["completed", "rejected"].includes(ticket.status)
+  const canRestore = isIT && ticket.is_archived
+  const canDeletePermanently = isAdmin && ticket.is_archived
+
   return (
     <div className="space-y-6">
-      <div>
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          <span className="text-sm text-muted-foreground">#{ticket.number}</span>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">#{ticket.number}</span>
 
-          <span
-            className={cn(
-              "rounded-full px-2 py-1 text-xs font-medium",
-              STATUS_COLORS[ticket.status]
-            )}
-          >
-            {STATUS_LABELS[ticket.status]}
-          </span>
+            <span className={cn("rounded-full px-2 py-1 text-xs font-medium", STATUS_COLORS[ticket.status])}>
+              {STATUS_LABELS[ticket.status]}
+            </span>
 
-          <span
-            className={cn(
-              "rounded-full px-2 py-1 text-xs font-medium",
-              PRIORITY_COLORS[ticket.priority]
+            <span className={cn("rounded-full px-2 py-1 text-xs font-medium", PRIORITY_COLORS[ticket.priority])}>
+              {PRIORITY_LABELS[ticket.priority]}
+            </span>
+
+            {ticket.is_archived && (
+              <span className="rounded-full bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
+                Архив
+              </span>
             )}
-          >
-            {PRIORITY_LABELS[ticket.priority]}
-          </span>
+          </div>
+
+          <h1 className="text-2xl font-bold">{ticket.subject}</h1>
+
+          {ticket.category_name && (
+            <p className="mt-1 text-sm text-muted-foreground">{ticket.category_name}</p>
+          )}
         </div>
 
-        <h1 className="text-2xl font-bold">{ticket.subject}</h1>
+        <div className="flex gap-2">
+          {canArchive && (
+            <button
+              type="button"
+              disabled={archiveLoading}
+              onClick={handleArchive}
+              className="rounded-lg border px-4 py-2 text-sm hover:bg-accent disabled:opacity-60"
+            >
+              {archiveLoading ? "Архивация..." : "Архивировать"}
+            </button>
+          )}
 
-        {ticket.category_name && (
-          <p className="mt-1 text-sm text-muted-foreground">
-            {ticket.category_name}
-          </p>
-        )}
+          {canRestore && (
+            <button
+              type="button"
+              disabled={archiveLoading}
+              onClick={handleRestore}
+              className="rounded-lg border px-4 py-2 text-sm hover:bg-accent disabled:opacity-60"
+            >
+              {archiveLoading ? "Восстановление..." : "Восстановить"}
+            </button>
+          )}
+
+          {canDeletePermanently && (
+            <button
+              type="button"
+              disabled={deleteLoading}
+              onClick={handleDeletePermanently}
+              className="rounded-lg border border-red-300 px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-60"
+            >
+              {deleteLoading ? "Удаление..." : "Удалить навсегда"}
+            </button>
+          )}
+        </div>
       </div>
+
+      {isIT && !ticket.is_archived && (
+        <div className="space-y-4 rounded-xl border border-border bg-card p-6">
+          <div>
+            <p className="mb-2 text-sm font-medium">Сменить статус</p>
+
+            {availableNextStatuses.length === 0 ? (
+              <div className="text-sm text-muted-foreground">Для текущего статуса переходов больше нет</div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {availableNextStatuses.map((status) => {
+                  const option = STATUS_OPTIONS.find((s) => s.value === status)
+                  if (!option) return null
+
+                  return (
+                    <button
+                      key={status}
+                      type="button"
+                      disabled={statusUpdating}
+                      onClick={() => handleStatusChange(status)}
+                      className="rounded-lg border px-3 py-2 text-sm font-medium transition hover:bg-accent disabled:opacity-60"
+                    >
+                      {statusUpdating ? "Обновление..." : option.label}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="space-y-4 rounded-xl border border-border bg-card p-6">
         <div>
           <p className="mb-1 text-sm font-medium">Описание</p>
-          <p className="whitespace-pre-wrap text-sm text-foreground">
-            {ticket.description}
-          </p>
+          <p className="whitespace-pre-wrap text-sm text-foreground">{ticket.description}</p>
         </div>
 
         <div className="grid gap-4 text-sm md:grid-cols-2">
@@ -162,6 +356,83 @@ export default function TicketDetailPage() {
             <p className="text-muted-foreground">Контактный телефон</p>
             <p>{ticket.contact_phone ?? "—"}</p>
           </div>
+
+          {ticket.archived_at && (
+            <div>
+              <p className="text-muted-foreground">Архивировано</p>
+              <p>{formatDateTime(ticket.archived_at)}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-4 rounded-xl border border-border bg-card p-6">
+        <h2 className="text-lg font-semibold">История изменений</h2>
+
+        {history.length === 0 ? (
+          <p className="text-sm text-muted-foreground">История пока пуста</p>
+        ) : (
+          <div className="space-y-3">
+            {history.map((item) => (
+              <div key={item.id} className="rounded-lg border border-border p-3 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium">{item.changed_by_name ?? "Неизвестно"}</span>
+                  <span className="text-xs text-muted-foreground">{formatDateTime(item.created_at)}</span>
+                </div>
+
+                <p className="mt-2 text-muted-foreground">
+                  Поле: <span className="text-foreground">{item.field}</span>
+                </p>
+
+                <p className="text-muted-foreground">
+                  Было: <span className="text-foreground">{item.old_value ?? "—"}</span>
+                </p>
+
+                <p className="text-muted-foreground">
+                  Стало: <span className="text-foreground">{item.new_value ?? "—"}</span>
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-4 rounded-xl border border-border bg-card p-6">
+        <h2 className="text-lg font-semibold">Комментарии</h2>
+
+        {comments.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Пока нет комментариев</p>
+        ) : (
+          <div className="space-y-3">
+            {comments.map((comment) => (
+              <div key={comment.id} className="rounded-lg border border-border p-3 text-sm">
+                <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium">{comment.author_name ?? "Неизвестно"}</span>
+                  <span className="text-xs text-muted-foreground">{formatDateTime(comment.created_at)}</span>
+                </div>
+
+                <p className="whitespace-pre-wrap">{comment.text}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <textarea
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
+            placeholder="Написать комментарий..."
+            className="min-h-[110px] w-full rounded-lg border border-border px-3 py-2 outline-none"
+          />
+
+          <button
+            type="button"
+            disabled={commentSending || !newComment.trim()}
+            onClick={handleAddComment}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary/90 disabled:opacity-60"
+          >
+            {commentSending ? "Отправка..." : "Отправить"}
+          </button>
         </div>
       </div>
     </div>

@@ -1,12 +1,14 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.tickets.enums import ALLOWED_TRANSITIONS, TicketPriority, TicketStatus
-from app.tickets.models import Ticket, TicketCategory, TicketComment, TicketHistory
+from app.tickets.models import Ticket, TicketAttachment, TicketCategory, TicketComment, TicketHistory
 from app.tickets.schemas import TicketCreate, TicketStats, TicketUpdate
 from app.users.models import User
 
@@ -58,6 +60,7 @@ async def get_tickets(
     author_id: UUID | None = None,
     assignee_id: UUID | None = None,
     search: str | None = None,
+    archived: bool = False,
 ) -> tuple[list[Ticket], int]:
     stmt = select(Ticket).options(
         selectinload(Ticket.category),
@@ -66,7 +69,7 @@ async def get_tickets(
     )
     count_stmt = select(func.count()).select_from(Ticket)
 
-    filters = []
+    filters = [Ticket.is_archived.is_(archived)]
 
     if status is not None:
         filters.append(Ticket.status == status)
@@ -91,7 +94,7 @@ async def get_tickets(
     return list(result.scalars().all()), total
 
 
-async def get_ticket_by_id(db: AsyncSession, ticket_id: UUID) -> Ticket | None:
+async def get_ticket_by_id(db: AsyncSession, ticket_id: UUID, include_archived: bool = True) -> Ticket | None:
     stmt = (
         select(Ticket)
         .options(
@@ -104,6 +107,10 @@ async def get_ticket_by_id(db: AsyncSession, ticket_id: UUID) -> Ticket | None:
         )
         .where(Ticket.id == ticket_id)
     )
+
+    if not include_archived:
+        stmt = stmt.where(Ticket.is_archived.is_(False))
+
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
@@ -137,21 +144,26 @@ async def update_ticket(
         if data.status not in allowed:
             raise ValueError(f"Cannot transition from {ticket.status.value} to {data.status.value}")
 
+        old_status = ticket.status
+
         changes.append(
             TicketHistory(
                 ticket_id=ticket.id,
                 changed_by=changed_by.id,
                 field="status",
-                old_value=ticket.status.value,
+                old_value=old_status.value,
                 new_value=data.status.value,
             )
         )
         ticket.status = data.status
 
-        if data.status == TicketStatus.escalated:
+        if data.status == TicketStatus.escalated and old_status != TicketStatus.escalated:
             ticket.escalated_at = datetime.now(timezone.utc)
-        elif data.status in (TicketStatus.completed, TicketStatus.rejected):
+
+        if data.status in (TicketStatus.completed, TicketStatus.rejected):
             ticket.completed_at = datetime.now(timezone.utc)
+        else:
+            ticket.completed_at = None
 
     if data.assignee_id is not None and data.assignee_id != ticket.assignee_id:
         changes.append(
@@ -185,6 +197,95 @@ async def update_ticket(
     return ticket
 
 
+async def archive_ticket(db: AsyncSession, ticket: Ticket, changed_by: User) -> Ticket:
+    if ticket.is_archived:
+        return ticket
+
+    ticket.is_archived = True
+    ticket.archived_at = datetime.now(timezone.utc)
+
+    db.add(
+        TicketHistory(
+            ticket_id=ticket.id,
+            changed_by=changed_by.id,
+            field="archived",
+            old_value="false",
+            new_value="true",
+        )
+    )
+
+    await db.commit()
+    await db.refresh(ticket)
+    return ticket
+
+
+async def restore_ticket(db: AsyncSession, ticket: Ticket, changed_by: User) -> Ticket:
+    if not ticket.is_archived:
+        return ticket
+
+    ticket.is_archived = False
+    ticket.archived_at = None
+
+    db.add(
+        TicketHistory(
+            ticket_id=ticket.id,
+            changed_by=changed_by.id,
+            field="archived",
+            old_value="true",
+            new_value="false",
+        )
+    )
+
+    await db.commit()
+    await db.refresh(ticket)
+    return ticket
+
+
+async def delete_ticket_permanently(db: AsyncSession, ticket: Ticket) -> None:
+    for attachment in ticket.attachments:
+        path = Path(settings.upload_dir) / "tickets" / str(ticket.id) / Path(attachment.file_path).name
+        if path.exists():
+            path.unlink(missing_ok=True)
+
+    attach_dir = Path(settings.upload_dir) / "tickets" / str(ticket.id)
+    if attach_dir.exists() and attach_dir.is_dir():
+        try:
+            attach_dir.rmdir()
+        except OSError:
+            pass
+
+    await db.delete(ticket)
+    await db.commit()
+
+
+async def cleanup_old_tickets(db: AsyncSession, completed_days: int = 180, rejected_days: int = 30) -> int:
+    now = datetime.now(timezone.utc)
+    completed_before = now - timedelta(days=completed_days)
+    rejected_before = now - timedelta(days=rejected_days)
+
+    stmt = (
+        select(Ticket)
+        .options(selectinload(Ticket.attachments))
+        .where(
+            Ticket.is_archived.is_(True),
+            or_(
+                (Ticket.status == TicketStatus.completed) & (Ticket.updated_at < completed_before),
+                (Ticket.status == TicketStatus.rejected) & (Ticket.updated_at < rejected_before),
+            ),
+        )
+    )
+
+    result = await db.execute(stmt)
+    tickets = list(result.scalars().all())
+
+    count = 0
+    for ticket in tickets:
+        await delete_ticket_permanently(db, ticket)
+        count += 1
+
+    return count
+
+
 async def add_comment(db: AsyncSession, ticket_id: UUID, author_id: UUID, text: str) -> TicketComment:
     comment = TicketComment(ticket_id=ticket_id, author_id=author_id, text=text.strip())
     db.add(comment)
@@ -216,7 +317,7 @@ async def get_history(db: AsyncSession, ticket_id: UUID) -> list[TicketHistory]:
 
 
 async def get_ticket_stats(db: AsyncSession, author_id: UUID | None = None) -> TicketStats:
-    stmt = select(Ticket.status, func.count()).group_by(Ticket.status)
+    stmt = select(Ticket.status, func.count()).where(Ticket.is_archived.is_(False)).group_by(Ticket.status)
     if author_id is not None:
         stmt = stmt.where(Ticket.author_id == author_id)
 

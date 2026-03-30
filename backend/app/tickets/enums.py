@@ -11,17 +11,37 @@ class TicketStatus(str, enum.Enum):
 
 
 class TicketPriority(str, enum.Enum):
-    now = "now"           # Сейчас
-    today = "today"       # Сегодня
-    normal = "normal"     # В рабочем порядке
+    now = "now"
+    today = "today"
+    normal = "normal"
 
 
-# Допустимые переходы статусов
 ALLOWED_TRANSITIONS: dict[TicketStatus, list[TicketStatus]] = {
-    TicketStatus.new: [TicketStatus.in_progress, TicketStatus.escalated],
-    TicketStatus.escalated: [TicketStatus.in_progress],
-    TicketStatus.in_progress: [TicketStatus.waiting, TicketStatus.completed, TicketStatus.rejected],
-    TicketStatus.waiting: [TicketStatus.in_progress],
+    TicketStatus.new: [
+        TicketStatus.in_progress,
+        TicketStatus.waiting,
+        TicketStatus.escalated,
+        TicketStatus.completed,
+        TicketStatus.rejected,
+    ],
+    TicketStatus.in_progress: [
+        TicketStatus.waiting,
+        TicketStatus.escalated,
+        TicketStatus.completed,
+        TicketStatus.rejected,
+    ],
+    TicketStatus.waiting: [
+        TicketStatus.in_progress,
+        TicketStatus.escalated,
+        TicketStatus.completed,
+        TicketStatus.rejected,
+    ],
+    TicketStatus.escalated: [
+        TicketStatus.in_progress,
+        TicketStatus.waiting,
+        TicketStatus.completed,
+        TicketStatus.rejected,
+    ],
     TicketStatus.completed: [],
     TicketStatus.rejected: [],
 }

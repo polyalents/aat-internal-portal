@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
-import { createTicket, getCategories } from "@/shared/api/tickets"
-import type { TicketPriority } from "@/shared/types"
+import { createTicket, getTicketCategories } from "@/shared/api/tickets"
+import type { TicketCategory, TicketPriority } from "@/shared/types"
 
 export default function TicketCreatePage() {
   const navigate = useNavigate()
@@ -12,13 +12,12 @@ export default function TicketCreatePage() {
   const [priority, setPriority] = useState<TicketPriority>("normal")
   const [categoryId, setCategoryId] = useState("")
 
-  const [categories, setCategories] = useState<any[]>([])
+  const [categories, setCategories] = useState<TicketCategory[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // загрузка категорий
   useEffect(() => {
-    getCategories()
+    getTicketCategories()
       .then(setCategories)
       .catch((err) => {
         console.error("Ошибка загрузки категорий:", err)
@@ -38,8 +37,6 @@ export default function TicketCreatePage() {
         priority,
       })
 
-      console.log("CREATED TICKET RESPONSE:", ticket)
-
       navigate(`/tickets/${ticket.id}`)
     } catch (err: any) {
       console.error(err)
@@ -55,7 +52,6 @@ export default function TicketCreatePage() {
       <h1 className="text-2xl font-bold">Создать заявку</h1>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Тема */}
         <input
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
@@ -64,7 +60,6 @@ export default function TicketCreatePage() {
           required
         />
 
-        {/* Описание */}
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -73,7 +68,6 @@ export default function TicketCreatePage() {
           required
         />
 
-        {/* Категория */}
         <select
           value={categoryId}
           onChange={(e) => setCategoryId(e.target.value)}
@@ -88,21 +82,18 @@ export default function TicketCreatePage() {
           ))}
         </select>
 
-        {/* Приоритет */}
         <select
           value={priority}
           onChange={(e) => setPriority(e.target.value as TicketPriority)}
           className="w-full border rounded-lg px-3 py-2"
         >
-          <option value="now">Срочно</option>
+          <option value="now">Сейчас</option>
           <option value="today">Сегодня</option>
-          <option value="normal">Обычно</option>
+          <option value="normal">В рабочем порядке</option>
         </select>
 
-        {/* Ошибка */}
         {error && <div className="text-red-500 text-sm">{error}</div>}
 
-        {/* Кнопка */}
         <button
           type="submit"
           disabled={loading}

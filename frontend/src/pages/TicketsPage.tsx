@@ -9,10 +9,11 @@ import {
   CheckCircle2,
   XCircle,
   ArrowUpCircle,
+  Archive,
 } from "lucide-react"
 
 import type { Ticket as TicketType } from "@/shared/types"
-import { getTickets } from "@/shared/api/tickets"
+import { cleanupOldTickets, getTickets } from "@/shared/api/tickets"
 import {
   cn,
   formatRelative,
@@ -24,13 +25,13 @@ import {
 import { useAuthStore } from "@/features/auth/store"
 
 const STATUS_FILTER_OPTIONS = [
-  { value: '', label: 'Все статусы' },
-  { value: 'new', label: 'Новые' },
-  { value: 'in_progress', label: 'В работе' },
-  { value: 'waiting', label: 'Ожидание' },
-  { value: 'escalated', label: 'Эскалация' },
-  { value: 'completed', label: 'Решено' },
-  { value: 'rejected', label: 'Закрыто' },
+  { value: "", label: "Все статусы" },
+  { value: "new", label: "Новые" },
+  { value: "in_progress", label: "В работе" },
+  { value: "waiting", label: "Ожидание" },
+  { value: "escalated", label: "Эскалация" },
+  { value: "completed", label: "Решено" },
+  { value: "rejected", label: "Отклонено" },
 ]
 
 const STATUS_ICONS: Record<string, React.ReactNode> = {
@@ -38,8 +39,8 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
   in_progress: <ArrowUpCircle className="h-4 w-4" />,
   waiting: <Clock className="h-4 w-4" />,
   escalated: <AlertTriangle className="h-4 w-4" />,
-  resolved: <CheckCircle2 className="h-4 w-4" />,
-  closed: <XCircle className="h-4 w-4" />,
+  completed: <CheckCircle2 className="h-4 w-4" />,
+  rejected: <XCircle className="h-4 w-4" />,
 }
 
 export default function TicketsPage() {
@@ -48,6 +49,7 @@ export default function TicketsPage() {
   const { user } = useAuthStore()
 
   const isIT = user?.role === "it_specialist" || user?.role === "admin"
+  const isAdmin = user?.role === "admin"
 
   const [tickets, setTickets] = useState<TicketType[]>([])
   const [total, setTotal] = useState(0)
@@ -57,6 +59,8 @@ export default function TicketsPage() {
   const [search, setSearch] = useState(searchParams.get("search") || "")
   const [status, setStatus] = useState(searchParams.get("status") || "")
   const [page, setPage] = useState(Number(searchParams.get("page")) || 1)
+  const [archived, setArchived] = useState(searchParams.get("archived") === "true")
+  const [cleanupLoading, setCleanupLoading] = useState(false)
 
   const fetchTickets = useCallback(async () => {
     setLoading(true)
@@ -68,9 +72,11 @@ export default function TicketsPage() {
         size: number
         status?: string
         search?: string
+        archived?: boolean
       } = {
         page,
         size: 20,
+        archived,
       }
 
       if (status) params.status = status
@@ -86,10 +92,10 @@ export default function TicketsPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, status, search])
+  }, [page, status, search, archived])
 
   useEffect(() => {
-    fetchTickets()
+    void fetchTickets()
   }, [fetchTickets])
 
   useEffect(() => {
@@ -98,36 +104,73 @@ export default function TicketsPage() {
     if (status) params.status = status
     if (search) params.search = search
     if (page > 1) params.page = String(page)
+    if (archived) params.archived = "true"
 
     setSearchParams(params, { replace: true })
-  }, [status, search, page, setSearchParams])
+  }, [status, search, page, archived, setSearchParams])
+
+  async function handleCleanup() {
+    if (!confirm("Удалить старые архивные заявки из базы?")) return
+
+    try {
+      setCleanupLoading(true)
+      const result = await cleanupOldTickets()
+      alert(`Удалено заявок: ${result.deleted}`)
+      await fetchTickets()
+    } catch (err) {
+      console.error(err)
+      alert("Не удалось выполнить очистку")
+    } finally {
+      setCleanupLoading(false)
+    }
+  }
 
   const totalPages = Math.ceil(total / 20)
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Заявки</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {isIT ? "Все заявки системы" : "Мои заявки"}
+          <p className="mt-1 text-sm text-muted-foreground">
+            {archived ? "Архив заявок" : isIT ? "Все заявки системы" : "Мои заявки"}
           </p>
         </div>
 
-        <button
-          onClick={() => navigate("/tickets/new")}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          Создать заявку
-        </button>
+        <div className="flex gap-2">
+          {isIT && (
+            <button
+              onClick={() => setArchived((v) => !v)}
+              className="flex items-center gap-2 rounded-lg border px-4 py-2 hover:bg-accent"
+            >
+              <Archive className="h-4 w-4" />
+              {archived ? "Скрыть архив" : "Показать архив"}
+            </button>
+          )}
+
+          {isAdmin && archived && (
+            <button
+              onClick={handleCleanup}
+              disabled={cleanupLoading}
+              className="rounded-lg border border-red-300 px-4 py-2 text-red-600 hover:bg-red-50 disabled:opacity-60"
+            >
+              {cleanupLoading ? "Очистка..." : "Очистить старые"}
+            </button>
+          )}
+
+          <button
+            onClick={() => navigate("/tickets/new")}
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-white hover:bg-primary/90"
+          >
+            <Plus className="h-4 w-4" />
+            Создать заявку
+          </button>
+        </div>
       </div>
 
-      {/* Filters */}
       <div className="flex gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             value={search}
             onChange={(e) => {
@@ -135,7 +178,7 @@ export default function TicketsPage() {
               setPage(1)
             }}
             placeholder="Поиск..."
-            className="w-full pl-10 pr-4 py-2 border rounded-lg"
+            className="w-full rounded-lg border py-2 pl-10 pr-4"
           />
         </div>
 
@@ -145,7 +188,7 @@ export default function TicketsPage() {
             setStatus(e.target.value)
             setPage(1)
           }}
-          className="px-4 py-2 border rounded-lg"
+          className="rounded-lg border px-4 py-2"
         >
           {STATUS_FILTER_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -155,18 +198,17 @@ export default function TicketsPage() {
         </select>
       </div>
 
-      {/* Content */}
       {loading ? (
         <div className="flex justify-center py-20">
-          <div className="animate-spin h-6 w-6 border-b-2 border-primary" />
+          <div className="h-6 w-6 animate-spin border-b-2 border-primary" />
         </div>
       ) : error ? (
-        <div className="text-center text-red-500 py-10">{error}</div>
+        <div className="py-10 text-center text-red-500">{error}</div>
       ) : tickets.length === 0 ? (
-        <div className="text-center py-16 border rounded-xl">
+        <div className="rounded-xl border py-16 text-center">
           <Ticket className="mx-auto mb-3 text-muted-foreground" />
           <p className="text-muted-foreground">
-            {search || status ? "Ничего не найдено" : "Заявок пока нет"}
+            {search || status ? "Ничего не найдено" : archived ? "Архив пуст" : "Заявок пока нет"}
           </p>
         </div>
       ) : (
@@ -175,23 +217,29 @@ export default function TicketsPage() {
             <Link
               key={t.id}
               to={`/tickets/${t.id}`}
-              className="block border rounded-xl p-4 hover:shadow"
+              className="block rounded-xl border p-4 hover:shadow"
             >
               <div className="flex justify-between">
                 <div>
-                  <div className="flex gap-2 mb-1">
+                  <div className="mb-1 flex gap-2">
                     <span className="text-xs text-muted-foreground">
                       #{t.number || t.id.slice(0, 6)}
                     </span>
 
-                    <span className={cn("text-xs px-2 rounded", STATUS_COLORS[t.status])}>
+                    <span className={cn("flex items-center gap-1 rounded px-2 text-xs", STATUS_COLORS[t.status])}>
                       {STATUS_ICONS[t.status]}
                       {STATUS_LABELS[t.status]}
                     </span>
 
-                    <span className={cn("text-xs px-2 rounded", PRIORITY_COLORS[t.priority])}>
+                    <span className={cn("rounded px-2 text-xs", PRIORITY_COLORS[t.priority])}>
                       {PRIORITY_LABELS[t.priority]}
                     </span>
+
+                    {t.is_archived && (
+                      <span className="rounded bg-muted px-2 text-xs text-muted-foreground">
+                        Архив
+                      </span>
+                    )}
                   </div>
 
                   <div className="font-medium">{t.subject}</div>
@@ -206,22 +254,17 @@ export default function TicketsPage() {
         </div>
       )}
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex justify-center gap-3">
-          <button
-            disabled={page === 1}
-            onClick={() => setPage((p) => p - 1)}
-          >
+          <button disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
             Назад
           </button>
 
-          <span>{page} / {totalPages}</span>
+          <span>
+            {page} / {totalPages}
+          </span>
 
-          <button
-            disabled={page === totalPages}
-            onClick={() => setPage((p) => p + 1)}
-          >
+          <button disabled={page === totalPages} onClick={() => setPage((p) => p + 1)}>
             Вперёд
           </button>
         </div>
