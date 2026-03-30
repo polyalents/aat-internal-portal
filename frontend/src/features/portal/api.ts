@@ -19,7 +19,7 @@ export async function getAnnouncements(params?: {
   size?: number
   active_only?: boolean
 }): Promise<PaginatedResponse<Announcement>> {
-  const { data } = await client.get("/announcements", { params })
+  const { data } = await client.get("/announcements/", { params })
   return data
 }
 
@@ -28,7 +28,7 @@ export async function createAnnouncement(payload: {
   content: string
   expires_at?: string
 }): Promise<Announcement> {
-  const { data } = await client.post("/announcements", payload)
+  const { data } = await client.post("/announcements/", payload)
   return data
 }
 
@@ -46,7 +46,7 @@ export async function deleteAnnouncement(id: string): Promise<void> {
 
 // === Knowledge ===
 export async function getKnowledgeCategories(): Promise<KnowledgeCategory[]> {
-  const { data } = await client.get("/knowledge/categories")
+  const { data } = await client.get("/knowledge/categories/")
   return data
 }
 
@@ -54,7 +54,7 @@ export async function createKnowledgeCategory(payload: {
   name: string
   sort_order?: number
 }): Promise<KnowledgeCategory> {
-  const { data } = await client.post("/knowledge/categories", payload)
+  const { data } = await client.post("/knowledge/categories/", payload)
   return data
 }
 
@@ -64,7 +64,7 @@ export async function getArticles(params?: {
   category_id?: string
   search?: string
 }): Promise<PaginatedResponse<KnowledgeArticle>> {
-  const { data } = await client.get("/knowledge/articles", { params })
+  const { data } = await client.get("/knowledge/articles/", { params })
   return data
 }
 
@@ -78,7 +78,7 @@ export async function createArticle(payload: {
   content: string
   category_id: string
 }): Promise<KnowledgeArticle> {
-  const { data } = await client.post("/knowledge/articles", payload)
+  const { data } = await client.post("/knowledge/articles/", payload)
   return data
 }
 
@@ -99,7 +99,7 @@ export async function getChatMessages(params?: {
   before?: string
   limit?: number
 }): Promise<{ items: ChatMessage[]; has_more: boolean }> {
-  const { data } = await client.get("/chat/messages", { params })
+  const { data } = await client.get("/chat/messages/", { params })
   return data
 }
 
@@ -114,8 +114,17 @@ export async function pinChatMessage(id: string): Promise<ChatMessage> {
 
 // === Dashboard ===
 export async function getDashboard(): Promise<Dashboard> {
-  const { data } = await client.get("/dashboard")
-  return data
+  const token = localStorage.getItem("access_token")
+
+  const response = await fetch("/api/dashboard/", {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`)
+  }
+
+  return response.json()
 }
 
 // === Users ===
@@ -126,12 +135,12 @@ export async function getUsers(params?: {
   is_active?: boolean
   search?: string
 }): Promise<PaginatedResponse<User>> {
-  const { data } = await client.get("/users", { params })
+  const { data } = await client.get("/users/", { params })
   return data
 }
 
 export async function createUser(payload: UserCreate): Promise<User> {
-  const { data } = await client.post("/users", payload)
+  const { data } = await client.post("/users/", payload)
   return data
 }
 
@@ -142,12 +151,12 @@ export async function updateUser(id: string, payload: UserUpdate): Promise<User>
 
 // === Departments ===
 export async function getDepartments(): Promise<Department[]> {
-  const { data } = await client.get("/departments")
+  const { data } = await client.get("/departments/")
   return data
 }
 
 export async function createDepartment(payload: { name: string }): Promise<Department> {
-  const { data } = await client.post("/departments", payload)
+  const { data } = await client.post("/departments/", payload)
   return data
 }
 
@@ -165,12 +174,12 @@ export async function deleteDepartment(id: string): Promise<void> {
 
 // === Profile ===
 export async function getProfile() {
-  const { data } = await client.get("/profile")
+  const { data } = await client.get("/profile/")
   return data
 }
 
 export async function updateProfile(payload: Record<string, unknown>) {
-  const { data } = await client.patch("/profile", payload)
+  const { data } = await client.patch("/profile/", payload)
   return data
 }
 
@@ -187,13 +196,13 @@ export async function uploadProfilePhoto(file: File) {
 
 // === Settings ===
 export async function getSettings(): Promise<SystemSetting[]> {
-  const { data } = await client.get("/admin/settings")
+  const { data } = await client.get("/admin/settings/")
   return data
 }
 
 export async function updateSettings(
   settings: Record<string, string>
 ): Promise<SystemSetting[]> {
-  const { data } = await client.patch("/admin/settings", { settings })
+  const { data } = await client.patch("/admin/settings/", { settings })
   return data
 }

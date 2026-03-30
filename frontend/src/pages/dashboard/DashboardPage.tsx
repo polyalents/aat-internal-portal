@@ -1,20 +1,17 @@
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
-import { Ticket, CalendarHeart, Megaphone, AlertTriangle } from "lucide-react"
+import { AlertTriangle, Ticket } from "lucide-react"
 
-import { getDashboard } from "@/features/portal/api"
 import { useAuthStore } from "@/features/auth/store"
-import {
-  formatDate,
-  formatRelative,
-  STATUS_LABELS,
-  STATUS_COLORS,
-  PRIORITY_LABELS,
-  PRIORITY_COLORS,
-  cn,
-} from "@/lib/utils"
-
 import type { Dashboard } from "@/shared/types"
+import {
+  PRIORITY_COLORS,
+  PRIORITY_LABELS,
+  STATUS_COLORS,
+  STATUS_LABELS,
+  cn,
+  formatRelative,
+} from "@/lib/utils"
 
 export default function DashboardPage() {
   const [data, setData] = useState<Dashboard | null>(null)
@@ -23,10 +20,27 @@ export default function DashboardPage() {
   const { isIT } = useAuthStore()
 
   useEffect(() => {
-    getDashboard()
-      .then(setData)
-      .catch(console.error)
-      .finally(() => setLoading(false))
+    const token = localStorage.getItem("access_token")
+
+    fetch("/api/dashboard", {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${await res.text()}`)
+        }
+        return res.json()
+      })
+      .then((json: Dashboard) => {
+        setData(json)
+      })
+      .catch((err) => {
+        console.error("DASHBOARD FETCH ERROR:", err)
+        setData(null)
+      })
+      .finally(() => {
+        setLoading(false)
+      })
   }, [])
 
   if (loading) {

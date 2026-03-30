@@ -52,9 +52,13 @@ let failedQueue: Array<{
 
 function processQueue(error: unknown, token: string | null): void {
   failedQueue.forEach(({ resolve, reject }) => {
-    if (token) resolve(token)
-    else reject(error)
+    if (token) {
+      resolve(token)
+    } else {
+      reject(error)
+    }
   })
+
   failedQueue = []
 }
 
@@ -63,7 +67,9 @@ client.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as RetryableRequestConfig | undefined
 
-    if (!originalRequest) return Promise.reject(error)
+    if (!originalRequest) {
+      return Promise.reject(error)
+    }
 
     if (error.response?.status !== 401 || originalRequest._retry) {
       return Promise.reject(error)
@@ -96,9 +102,12 @@ client.interceptors.response.use(
 
     try {
       const refreshToken = getRefreshToken()
-      if (!refreshToken) throw new Error("No refresh token")
 
-      const { data } = await client.post<TokenResponse>("/auth/refresh", {
+      if (!refreshToken) {
+        throw new Error("No refresh token")
+      }
+
+      const { data } = await axios.post<TokenResponse>("/api/auth/refresh", {
         refresh_token: refreshToken,
       })
 

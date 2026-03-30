@@ -30,7 +30,7 @@ async def create_knowledge_category(db: AsyncSession, data: KnowledgeCategoryCre
         sort_order=data.sort_order,
     )
     db.add(category)
-    await db.flush()
+    await db.commit()
     await db.refresh(category)
     return category
 
@@ -48,14 +48,14 @@ async def update_knowledge_category(
     for field, value in update_data.items():
         setattr(category, field, value)
 
-    await db.flush()
+    await db.commit()
     await db.refresh(category)
     return category
 
 
 async def delete_knowledge_category(db: AsyncSession, category: KnowledgeCategory) -> None:
     await db.delete(category)
-    await db.flush()
+    await db.commit()
 
 
 async def get_articles(
@@ -104,6 +104,10 @@ async def get_article_by_id(db: AsyncSession, article_id: UUID) -> KnowledgeArti
 
 
 async def create_article(db: AsyncSession, data: ArticleCreate, author_id: UUID) -> KnowledgeArticle:
+    category = await get_knowledge_category_by_id(db, data.category_id)
+    if category is None:
+        raise ValueError("Related record not found or invalid reference")
+
     article = KnowledgeArticle(
         title=data.title.strip(),
         content=data.content.strip(),
@@ -111,7 +115,7 @@ async def create_article(db: AsyncSession, data: ArticleCreate, author_id: UUID)
         author_id=author_id,
     )
     db.add(article)
-    await db.flush()
+    await db.commit()
     await db.refresh(article)
     return article
 
@@ -129,14 +133,19 @@ async def update_article(
     if "content" in update_data and update_data["content"] is not None:
         update_data["content"] = update_data["content"].strip()
 
+    if "category_id" in update_data and update_data["category_id"] is not None:
+        category = await get_knowledge_category_by_id(db, update_data["category_id"])
+        if category is None:
+            raise ValueError("Related record not found or invalid reference")
+
     for field, value in update_data.items():
         setattr(article, field, value)
 
-    await db.flush()
+    await db.commit()
     await db.refresh(article)
     return article
 
 
 async def delete_article(db: AsyncSession, article: KnowledgeArticle) -> None:
     await db.delete(article)
-    await db.flush()
+    await db.commit()
