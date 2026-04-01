@@ -1,7 +1,7 @@
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -40,37 +40,19 @@ def _save_profile_photo(old_photo_url: str | None, content: bytes, filename: str
     return f"/uploads/photos/{generated_filename}"
 
 
-@router.get("/debug")
-async def debug_profile(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    employee = await get_employee_by_user_id(db, current_user.id)
-    return {
-        "current_user_id": str(current_user.id),
-        "current_user_email": getattr(current_user, "email", None),
-        "employee_found": employee is not None,
-        "employee_id": str(employee.id) if employee else None,
-        "employee_user_id": str(employee.user_id) if employee else None,
-    }
-
-
-@router.get("", response_model=EmployeeRead)
+@router.get("/", response_model=EmployeeRead)
 async def get_profile(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> EmployeeRead:
     employee = await get_employee_by_user_id(db, current_user.id)
     if employee is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Profile not found for user_id={current_user.id}",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
 
     return EmployeeRead(**_employee_to_read_dict(employee))
 
 
-@router.patch("", response_model=EmployeeRead)
+@router.patch("/", response_model=EmployeeRead)
 async def patch_profile(
     body: EmployeeUpdate,
     db: AsyncSession = Depends(get_db),
@@ -78,10 +60,7 @@ async def patch_profile(
 ) -> EmployeeRead:
     employee = await get_employee_by_user_id(db, current_user.id)
     if employee is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Profile not found for user_id={current_user.id}",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
 
     allowed_fields = {
         "mobile_phone",
@@ -92,33 +71,27 @@ async def patch_profile(
         "vacation_end",
     }
 
-    payload = body.model_dump(exclude_unset=True)
-    filtered_payload = {key: value for key, value in payload.items() if key in allowed_fields}
-    update_data = EmployeeUpdate(**filtered_payload)
+    raw_data = body.model_dump(exclude_unset=True)
+    filtered_data = {key: value for key, value in raw_data.items() if key in allowed_fields}
+    update_payload = EmployeeUpdate(**filtered_data)
 
-    employee = await update_employee(db, employee, update_data)
+    employee = await update_employee(db, employee, update_payload)
     employee = await get_employee_by_user_id(db, current_user.id)
     if employee is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to reload profile",
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to reload profile")
 
     return EmployeeRead(**_employee_to_read_dict(employee))
 
 
 @router.post("/photo", response_model=EmployeeRead)
 async def upload_profile_photo(
-    file: UploadFile = File(...),
+    file: UploadFile,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> EmployeeRead:
     employee = await get_employee_by_user_id(db, current_user.id)
     if employee is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Profile not found for user_id={current_user.id}",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
 
     if file.content_type not in ALLOWED_IMAGE_TYPES:
         raise HTTPException(
@@ -136,14 +109,11 @@ async def upload_profile_photo(
         )
 
     employee.photo_url = _save_profile_photo(employee.photo_url, content, file.filename or "photo.jpg")
-    await db.commit()
+    await db.flush()
     await db.refresh(employee)
 
     employee = await get_employee_by_user_id(db, current_user.id)
     if employee is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to reload profile",
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to reload profile")
 
     return EmployeeRead(**_employee_to_read_dict(employee))

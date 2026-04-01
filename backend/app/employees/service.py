@@ -3,10 +3,15 @@ from uuid import UUID
 
 from sqlalchemy import extract, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload
 
 from app.employees.models import Employee
 from app.employees.schemas import BirthdayEntry, EmployeeCreate, EmployeeUpdate, OrgTreeNode
+
+
+def _build_full_name(last_name: str | None, first_name: str | None, middle_name: str | None) -> str:
+    parts = [last_name, first_name, middle_name]
+    return " ".join(part.strip() for part in parts if part and part.strip())
 
 
 async def get_employees(
@@ -17,9 +22,12 @@ async def get_employees(
     department_id: UUID | None = None,
     is_active: bool | None = True,
 ) -> tuple[list[Employee], int]:
-    stmt = select(Employee).options(
-        selectinload(Employee.department),
-        selectinload(Employee.manager),
+    stmt = (
+        select(Employee)
+        .options(
+            joinedload(Employee.department),
+            joinedload(Employee.manager),
+        )
     )
     count_stmt = select(func.count()).select_from(Employee)
 
@@ -44,9 +52,15 @@ async def get_employees(
         count_stmt = count_stmt.where(search_filter)
 
     total = (await db.execute(count_stmt)).scalar() or 0
-    stmt = stmt.order_by(Employee.last_name, Employee.first_name).offset((page - 1) * size).limit(size)
+
+    stmt = (
+        stmt.order_by(Employee.last_name, Employee.first_name)
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+
     result = await db.execute(stmt)
-    employees = list(result.scalars().all())
+    employees = list(result.scalars().unique().all())
 
     return employees, total
 
@@ -54,7 +68,10 @@ async def get_employees(
 async def get_employee_by_id(db: AsyncSession, emp_id: UUID) -> Employee | None:
     stmt = (
         select(Employee)
-        .options(selectinload(Employee.department), selectinload(Employee.manager))
+        .options(
+            joinedload(Employee.department),
+            joinedload(Employee.manager),
+        )
         .where(Employee.id == emp_id)
     )
     result = await db.execute(stmt)
@@ -64,7 +81,10 @@ async def get_employee_by_id(db: AsyncSession, emp_id: UUID) -> Employee | None:
 async def get_employee_by_user_id(db: AsyncSession, user_id: UUID) -> Employee | None:
     stmt = (
         select(Employee)
-        .options(selectinload(Employee.department), selectinload(Employee.manager))
+        .options(
+            joinedload(Employee.department),
+            joinedload(Employee.manager),
+        )
         .where(Employee.user_id == user_id)
     )
     result = await db.execute(stmt)
@@ -81,9 +101,13 @@ async def create_employee(db: AsyncSession, data: EmployeeCreate) -> Employee:
     if payload.get("middle_name"):
         payload["middle_name"] = payload["middle_name"].strip()
 
+    for field in ("room_number", "internal_phone", "mobile_phone"):
+        if payload.get(field) is not None:
+            payload[field] = payload[field].strip() or None
+
     employee = Employee(**payload)
     db.add(employee)
-    await db.flush()
+    await db.commit()
     await db.refresh(employee)
     return employee
 
@@ -98,29 +122,43 @@ async def update_employee(db: AsyncSession, employee: Employee, data: EmployeeUp
         if field in update_data and update_data[field] is not None:
             update_data[field] = update_data[field].strip()
 
+    for field in ("room_number", "internal_phone", "mobile_phone"):
+        if field in update_data and update_data[field] is not None:
+            update_data[field] = update_data[field].strip() or None
+
     for field, value in update_data.items():
         setattr(employee, field, value)
 
-    await db.flush()
+    await db.commit()
     await db.refresh(employee)
     return employee
 
 
 async def deactivate_employee(db: AsyncSession, employee: Employee) -> Employee:
     employee.is_active = False
-    await db.flush()
+    await db.commit()
     await db.refresh(employee)
     return employee
 
 
 def _employee_to_read_dict(emp: Employee) -> dict:
+    full_name = _build_full_name(emp.last_name, emp.first_name, emp.middle_name)
+
+    manager_name = None
+    if emp.manager is not None:
+        manager_name = _build_full_name(
+            emp.manager.last_name,
+            emp.manager.first_name,
+            emp.manager.middle_name,
+        )
+
     return {
         "id": emp.id,
         "user_id": emp.user_id,
         "first_name": emp.first_name,
         "last_name": emp.last_name,
         "middle_name": emp.middle_name,
-        "full_name": emp.full_name,
+        "full_name": full_name,
         "position": emp.position,
         "department_id": emp.department_id,
         "department_name": emp.department.name if emp.department else None,
@@ -131,7 +169,7 @@ def _employee_to_read_dict(emp: Employee) -> dict:
         "birth_date": emp.birth_date,
         "photo_url": emp.photo_url,
         "manager_id": emp.manager_id,
-        "manager_name": emp.manager.full_name if emp.manager else None,
+        "manager_name": manager_name,
         "vacation_start": emp.vacation_start,
         "vacation_end": emp.vacation_end,
         "is_on_vacation": emp.is_on_vacation,
@@ -144,12 +182,12 @@ def _employee_to_read_dict(emp: Employee) -> dict:
 async def get_org_tree(db: AsyncSession) -> list[OrgTreeNode]:
     stmt = (
         select(Employee)
-        .options(selectinload(Employee.department))
+        .options(joinedload(Employee.department))
         .where(Employee.is_active.is_(True))
         .order_by(Employee.last_name, Employee.first_name)
     )
     result = await db.execute(stmt)
-    all_employees = list(result.scalars().all())
+    all_employees = list(result.scalars().unique().all())
 
     children_map: dict[UUID | None, list[Employee]] = {}
     for employee in all_employees:
@@ -159,7 +197,7 @@ async def get_org_tree(db: AsyncSession) -> list[OrgTreeNode]:
         children = children_map.get(employee.id, [])
         return OrgTreeNode(
             id=employee.id,
-            full_name=employee.full_name,
+            full_name=_build_full_name(employee.last_name, employee.first_name, employee.middle_name),
             position=employee.position,
             department_name=employee.department.name if employee.department else None,
             photo_url=employee.photo_url,
@@ -179,7 +217,7 @@ async def get_birthdays(
 
     stmt = (
         select(Employee)
-        .options(selectinload(Employee.department))
+        .options(joinedload(Employee.department))
         .where(Employee.is_active.is_(True), Employee.birth_date.is_not(None))
     )
 
@@ -214,14 +252,18 @@ async def get_birthdays(
         if 1 <= month <= 12:
             stmt = stmt.where(extract("month", Employee.birth_date) == month)
 
-    stmt = stmt.order_by(extract("month", Employee.birth_date), extract("day", Employee.birth_date))
+    stmt = stmt.order_by(
+        extract("month", Employee.birth_date),
+        extract("day", Employee.birth_date),
+    )
+
     result = await db.execute(stmt)
-    employees = list(result.scalars().all())
+    employees = list(result.scalars().unique().all())
 
     return [
         BirthdayEntry(
             id=employee.id,
-            full_name=employee.full_name,
+            full_name=_build_full_name(employee.last_name, employee.first_name, employee.middle_name),
             position=employee.position,
             department_name=employee.department.name if employee.department else None,
             birth_date=employee.birth_date,

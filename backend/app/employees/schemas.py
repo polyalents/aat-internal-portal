@@ -1,7 +1,25 @@
 from datetime import date, datetime
 from uuid import UUID
+import re
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+RELAXED_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _validate_relaxed_email(value: str | None) -> str | None:
+    if value is None:
+        return None
+
+    value = value.strip().lower()
+    if not value:
+        raise ValueError("Email must not be empty")
+
+    if not RELAXED_EMAIL_RE.match(value):
+        raise ValueError("Invalid email format")
+
+    return value
 
 
 class EmployeeRead(BaseModel):
@@ -17,7 +35,7 @@ class EmployeeRead(BaseModel):
     room_number: str | None
     internal_phone: str | None
     mobile_phone: str | None
-    email: EmailStr
+    email: str
     birth_date: date | None
     photo_url: str | None
     manager_id: UUID | None
@@ -31,6 +49,14 @@ class EmployeeRead(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        validated = _validate_relaxed_email(value)
+        if validated is None:
+            raise ValueError("Email is required")
+        return validated
+
 
 class EmployeeCreate(BaseModel):
     user_id: UUID | None = None
@@ -42,12 +68,20 @@ class EmployeeCreate(BaseModel):
     room_number: str | None = Field(None, max_length=50)
     internal_phone: str | None = Field(None, max_length=50)
     mobile_phone: str | None = Field(None, max_length=50)
-    email: EmailStr
+    email: str
     birth_date: date | None = None
     manager_id: UUID | None = None
     vacation_start: date | None = None
     vacation_end: date | None = None
     telegram_chat_id: str | None = Field(None, max_length=100)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        validated = _validate_relaxed_email(value)
+        if validated is None:
+            raise ValueError("Email is required")
+        return validated
 
 
 class EmployeeUpdate(BaseModel):
@@ -59,13 +93,18 @@ class EmployeeUpdate(BaseModel):
     room_number: str | None = Field(None, max_length=50)
     internal_phone: str | None = Field(None, max_length=50)
     mobile_phone: str | None = Field(None, max_length=50)
-    email: EmailStr | None = None
+    email: str | None = None
     birth_date: date | None = None
     manager_id: UUID | None = None
     vacation_start: date | None = None
     vacation_end: date | None = None
     is_active: bool | None = None
     telegram_chat_id: str | None = Field(None, max_length=100)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str | None) -> str | None:
+        return _validate_relaxed_email(value)
 
 
 class EmployeeListResponse(BaseModel):

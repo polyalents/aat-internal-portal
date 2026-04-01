@@ -33,6 +33,26 @@ ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_PHOTO_SIZE = 5 * 1024 * 1024
 
 
+def _save_employee_photo(employee: object, content: bytes, filename: str) -> str:
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "jpg"
+    safe_ext = ext if ext in {"jpg", "jpeg", "png", "webp"} else "jpg"
+    generated_filename = f"{uuid4().hex}.{safe_ext}"
+
+    photo_dir = Path(settings.upload_dir) / "photos"
+    photo_dir.mkdir(parents=True, exist_ok=True)
+
+    photo_path = photo_dir / generated_filename
+    photo_path.write_bytes(content)
+
+    old_photo_url = getattr(employee, "photo_url", None)
+    if old_photo_url and old_photo_url.startswith("/uploads/photos/"):
+        old_path = Path(settings.upload_dir) / "photos" / Path(old_photo_url).name
+        if old_path.exists():
+            old_path.unlink(missing_ok=True)
+
+    return f"/uploads/photos/{generated_filename}"
+
+
 @router.get("/", response_model=EmployeeListResponse)
 async def list_employees(
     page: int = Query(1, ge=1),
@@ -147,31 +167,15 @@ async def upload_photo(
         )
 
     content = await file.read()
+    await file.close()
+
     if len(content) > MAX_PHOTO_SIZE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Photo size must be under 5 MB",
         )
 
-    ext = file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "jpg"
-    filename = f"{uuid4().hex}.{ext}"
-
-    photo_dir = Path(settings.upload_dir) / "photos"
-    photo_dir.mkdir(parents=True, exist_ok=True)
-    photo_path = photo_dir / filename
-
-    with open(photo_path, "wb") as f:
-        f.write(content)
-
-    await file.close()
-
-    if employee.photo_url and employee.photo_url.startswith("/uploads/"):
-        relative_path = employee.photo_url.removeprefix("/uploads/")
-        old_path = Path(settings.upload_dir) / relative_path
-        if old_path.exists():
-            old_path.unlink(missing_ok=True)
-
-    employee.photo_url = f"/uploads/photos/{filename}"
+    employee.photo_url = _save_employee_photo(employee, content, file.filename or "photo.jpg")
     await db.flush()
     await db.refresh(employee)
 

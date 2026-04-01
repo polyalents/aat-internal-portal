@@ -1,8 +1,11 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.routing import APIRoute
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.exceptions import register_exception_handlers
@@ -11,6 +14,16 @@ from app.middleware.rate_limit import RateLimitMiddleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    upload_dir = Path(settings.upload_dir)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    print("\n=== REGISTERED ROUTES ===")
+    for route in app.routes:
+        if isinstance(route, APIRoute):
+            methods = ",".join(sorted(route.methods))
+            print(f"{methods:20} {route.path}")
+    print("=========================\n")
+
     yield
 
 
@@ -23,7 +36,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
         redirect_slashes=False,
     )
-    
+
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(
         CORSMiddleware,
@@ -34,6 +47,10 @@ def create_app() -> FastAPI:
     )
 
     register_exception_handlers(app)
+
+    uploads_dir = Path(settings.upload_dir)
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
     from app.admin.router import router as admin_router
     from app.announcements.router import router as announcements_router
