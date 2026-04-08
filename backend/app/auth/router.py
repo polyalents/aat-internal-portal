@@ -9,7 +9,6 @@ from app.auth.service import authenticate_user, get_user_by_id
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.users.models import User
-from app.users.schemas import UserRead
 
 router = APIRouter()
 
@@ -76,4 +75,8 @@ async def get_me(current_user: User = Depends(get_current_user)):
         "username": current_user.username,
         "email": current_user.email,
         "role": current_user.role,
+        "is_it_manager": current_user.is_it_manager,
+        "is_active": current_user.is_active,
+        "created_at": current_user.created_at,
+        "updated_at": current_user.updated_at,
     }

@@ -1,10 +1,13 @@
 from datetime import date, timedelta
 from uuid import UUID
 
+from fastapi import HTTPException, status
 from sqlalchemy import extract, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
+from app.departments.models import Department
 from app.employees.models import Employee
 from app.employees.schemas import BirthdayEntry, EmployeeCreate, EmployeeUpdate, OrgTreeNode
 
@@ -12,6 +15,28 @@ from app.employees.schemas import BirthdayEntry, EmployeeCreate, EmployeeUpdate,
 def _build_full_name(last_name: str | None, first_name: str | None, middle_name: str | None) -> str:
     parts = [last_name, first_name, middle_name]
     return " ".join(part.strip() for part in parts if part and part.strip())
+
+
+async def _ensure_user_binding_available(
+    db: AsyncSession,
+    user_id: UUID | None,
+    current_employee_id: UUID | None = None,
+) -> None:
+    if user_id is None:
+        return
+
+    existing = await db.execute(select(Employee).where(Employee.user_id == user_id))
+    bound_employee = existing.scalar_one_or_none()
+    if bound_employee is None:
+        return
+
+    if current_employee_id is not None and bound_employee.id == current_employee_id:
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="Selected user is already bound to another employee",
+    )
 
 
 async def get_employees(
@@ -105,6 +130,8 @@ async def create_employee(db: AsyncSession, data: EmployeeCreate) -> Employee:
         if payload.get(field) is not None:
             payload[field] = payload[field].strip() or None
 
+    await _ensure_user_binding_available(db, payload.get("user_id"))
+
     employee = Employee(**payload)
     db.add(employee)
     await db.commit()
@@ -126,6 +153,9 @@ async def update_employee(db: AsyncSession, employee: Employee, data: EmployeeUp
         if field in update_data and update_data[field] is not None:
             update_data[field] = update_data[field].strip() or None
 
+    if "user_id" in update_data:
+        await _ensure_user_binding_available(db, update_data["user_id"], employee.id)
+
     for field, value in update_data.items():
         setattr(employee, field, value)
 
@@ -134,11 +164,34 @@ async def update_employee(db: AsyncSession, employee: Employee, data: EmployeeUp
     return employee
 
 
-async def deactivate_employee(db: AsyncSession, employee: Employee) -> Employee:
-    employee.is_active = False
-    await db.commit()
-    await db.refresh(employee)
-    return employee
+async def delete_employee_permanently(db: AsyncSession, employee: Employee) -> None:
+    subordinate = await db.execute(
+        select(Employee.id).where(Employee.manager_id == employee.id).limit(1)
+    )
+    if subordinate.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete employee who is assigned as manager for other employees",
+        )
+
+    headed_department = await db.execute(
+        select(Department.id).where(Department.head_id == employee.id).limit(1)
+    )
+    if headed_department.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete employee who is assigned as department head",
+        )
+
+    try:
+        await db.delete(employee)
+        await db.flush()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete employee because it is referenced by related records",
+        ) from exc
 
 
 def _employee_to_read_dict(emp: Employee) -> dict:

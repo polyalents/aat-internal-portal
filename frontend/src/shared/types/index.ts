@@ -20,6 +20,7 @@ export interface User {
   role: UserRole
   is_it_manager: boolean
   is_active: boolean
+  employee_id?: string | null
   created_at: string
   updated_at: string
 }
@@ -38,6 +39,10 @@ export interface UserUpdate {
   is_it_manager?: boolean
   is_active?: boolean
   password?: string
+}
+
+export interface UserPasswordChange {
+  password: string
 }
 
 // === Department ===

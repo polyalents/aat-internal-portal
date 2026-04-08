@@ -18,7 +18,7 @@ from app.employees.schemas import (
 from app.employees.service import (
     _employee_to_read_dict,
     create_employee,
-    deactivate_employee,
+    delete_employee_permanently,
     get_birthdays,
     get_employee_by_id,
     get_employees,
@@ -135,18 +135,19 @@ async def update_existing_employee(
     return EmployeeRead(**_employee_to_read_dict(employee))
 
 
-@router.delete("/{emp_id}", response_model=EmployeeRead)
+@router.delete("/{emp_id}")
 async def delete_employee(
     emp_id: UUID,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_it),
-) -> EmployeeRead:
+) -> dict[str, str]:
     employee = await get_employee_by_id(db, emp_id)
     if employee is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found")
 
-    employee = await deactivate_employee(db, employee)
-    return EmployeeRead(**_employee_to_read_dict(employee))
+    await delete_employee_permanently(db, employee)
+    await db.commit()
+    return {"status": "deleted"}
 
 
 @router.post("/{emp_id}/photo", response_model=EmployeeRead)

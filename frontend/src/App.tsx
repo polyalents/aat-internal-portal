@@ -23,13 +23,11 @@ import ArticlePage from "@/pages/ArticlePage"
 import ProfilePage from "@/pages/ProfilePage"
 
 import AdminPage from "@/pages/admin/AdminPage"
+import AdminUsersPage from "@/pages/admin/AdminUsersPage"
+import AdminEmployeesPage from "@/pages/admin/AdminEmployeesPage"
 
 function LoadingScreen() {
-  return (
-    <div className="flex min-h-screen items-center justify-center text-muted-foreground">
-      Загрузка...
-    </div>
-  )
+  return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Загрузка...</div>
 }
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -72,31 +70,24 @@ export default function App() {
         >
           <Route index element={<DashboardPage />} />
 
-          {/* Employees */}
           <Route path="employees" element={<EmployeesPage />} />
           <Route path="employees/:id" element={<EmployeeDetailPage />} />
 
-          {/* Structure */}
           <Route path="org-tree" element={<OrgTreePage />} />
           <Route path="birthdays" element={<BirthdaysPage />} />
 
-          {/* Tickets */}
           <Route path="tickets" element={<TicketsPage />} />
           <Route path="tickets/new" element={<TicketCreatePage />} />
           <Route path="tickets/:id" element={<TicketDetailPage />} />
 
-          {/* Other */}
           <Route path="chat" element={<ChatPage />} />
           <Route path="announcements" element={<AnnouncementsPage />} />
 
-          {/* Knowledge */}
           <Route path="knowledge" element={<KnowledgePage />} />
           <Route path="knowledge/:id" element={<ArticlePage />} />
 
-          {/* Profile */}
           <Route path="profile" element={<ProfilePage />} />
 
-          {/* Admin */}
           <Route
             path="admin"
             element={
@@ -104,7 +95,11 @@ export default function App() {
                 <AdminPage />
               </AdminRoute>
             }
-          />
+          >
+            <Route index element={<Navigate to="users" replace />} />
+            <Route path="users" element={<AdminUsersPage />} />
+            <Route path="employees" element={<AdminEmployeesPage />} />
+          </Route>
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
