@@ -42,7 +42,9 @@ async def create_new_department(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> DepartmentRead:
-    return await create_department(db, body)
+    department = await create_department(db, body)
+    await db.commit()
+    return department
 
 
 @router.patch("/{dept_id}", response_model=DepartmentRead)
@@ -55,7 +57,9 @@ async def update_existing_department(
     dept = await get_department_by_id(db, dept_id)
     if dept is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Department not found")
-    return await update_department(db, dept, body)
+    department = await update_department(db, dept, body)
+    await db.commit()
+    return department
 
 
 @router.delete("/{dept_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -69,3 +73,4 @@ async def delete_existing_department(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Department not found")
 
     await delete_department(db, dept)
+    await db.commit()

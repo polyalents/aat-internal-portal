@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import {
   Building2,
@@ -15,9 +15,11 @@ import { cn } from "@/lib/utils"
 function TreeNode({
   node,
   level = 0,
+  showDepartmentBadge = true,
 }: {
   node: OrgTreeNode
   level?: number
+  showDepartmentBadge?: boolean
 }) {
   const [expanded, setExpanded] = useState(level < 2)
   const hasChildren = node.children.length > 0
@@ -66,10 +68,20 @@ function TreeNode({
           >
             {node.full_name}
           </Link>
-          <p className="truncate text-xs text-muted-foreground">
-            {node.position}
-            {node.department_name ? ` · ${node.department_name}` : ""}
-          </p>
+          <p className="truncate text-xs text-muted-foreground">Должность: {node.position}</p>
+          {showDepartmentBadge && (
+            <div className="mt-1">
+              {node.department_name ? (
+                <span className="inline-flex max-w-full items-center rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                  <span className="truncate">Отдел: {node.department_name}</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center rounded-md border border-muted-foreground/30 bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                  Отдел: не указан
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {node.is_on_vacation && (
@@ -89,12 +101,60 @@ function TreeNode({
       {expanded && hasChildren && (
         <div>
           {node.children.map((child) => (
-            <TreeNode key={child.id} node={child} level={level + 1} />
+            <TreeNode
+              key={child.id}
+              node={child}
+              level={level + 1}
+              showDepartmentBadge={showDepartmentBadge}
+            />
           ))}
         </div>
       )}
     </div>
   )
+}
+
+type FlatNode = {
+  node: OrgTreeNode
+  parentId: string | null
+}
+
+type OrgTreeNodeWithDepartmentId = OrgTreeNode & {
+  department_id?: string | null
+}
+
+function collectFlatNodes(nodes: OrgTreeNode[], parentId: string | null = null): FlatNode[] {
+  const result: FlatNode[] = []
+  for (const node of nodes) {
+    result.push({ node, parentId })
+    result.push(...collectFlatNodes(node.children, node.id))
+  }
+  return result
+}
+
+function buildDepartmentTree(items: FlatNode[]): OrgTreeNode[] {
+  const itemMap = new Map(items.map((item) => [item.node.id, item]))
+  const childrenMap = new Map<string, OrgTreeNode[]>()
+
+  for (const item of items) {
+    if (!item.parentId || !itemMap.has(item.parentId)) {
+      continue
+    }
+    const siblings = childrenMap.get(item.parentId) ?? []
+    siblings.push(item.node)
+    childrenMap.set(item.parentId, siblings)
+  }
+
+  const buildNode = (node: OrgTreeNode): OrgTreeNode => ({
+    ...node,
+    children: (childrenMap.get(node.id) ?? []).map(buildNode),
+  })
+
+  const roots = items
+    .filter((item) => !item.parentId || !itemMap.has(item.parentId))
+    .map((item) => buildNode(item.node))
+
+  return roots
 }
 
 export default function OrgTreePage() {
@@ -107,6 +167,39 @@ export default function OrgTreePage() {
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
+
+  const departmentSections = useMemo(() => {
+    const flatNodes = collectFlatNodes(tree)
+    const grouped = new Map<string, FlatNode[]>()
+    const sectionLabels = new Map<string, string>()
+
+    for (const item of flatNodes) {
+      const departmentId = (item.node as OrgTreeNodeWithDepartmentId).department_id ?? null
+      const departmentName = item.node.department_name?.trim() || "Без отдела"
+      const groupKey = departmentId ? `dept:${departmentId}` : `name:${departmentName}`
+      const group = grouped.get(groupKey) ?? []
+      group.push(item)
+      grouped.set(groupKey, group)
+      if (!sectionLabels.has(groupKey)) {
+        sectionLabels.set(groupKey, departmentName)
+      }
+    }
+
+    const sections = Array.from(grouped.entries()).map(([groupKey, items]) => {
+      const sectionTree = buildDepartmentTree(items)
+      const peopleCount = items.length
+      const departmentName = sectionLabels.get(groupKey) ?? "Без отдела"
+      return { groupKey, departmentName, sectionTree, peopleCount }
+    })
+
+    sections.sort((a, b) => {
+      if (a.departmentName === "Без отдела") return 1
+      if (b.departmentName === "Без отдела") return -1
+      return a.departmentName.localeCompare(b.departmentName, "ru")
+    })
+
+    return sections
+  }, [tree])
 
   if (loading) {
     return (
@@ -128,27 +221,43 @@ export default function OrgTreePage() {
 
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Building2 className="h-4 w-4" />
-          <span>
-            {tree.length}{" "}
-            {tree.length === 1 ? "корневой узел" : "корневых узлов"}
-          </span>
+          <span>Отделов: {departmentSections.length}</span>
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-4">
-        {tree.length === 0 ? (
+      {departmentSections.length === 0 ? (
+        <div className="rounded-xl border border-border bg-card p-4">
           <div className="py-12 text-center text-muted-foreground">
             <Building2 className="mx-auto mb-3 h-12 w-12 text-muted-foreground/40" />
             <p>Оргструктура пока не заполнена</p>
           </div>
-        ) : (
-          <div className="space-y-0.5">
-            {tree.map((node) => (
-              <TreeNode key={node.id} node={node} />
-            ))}
-          </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {departmentSections.map((section) => (
+            <section key={section.groupKey} className="rounded-xl border border-border bg-card p-4">
+              <header className="mb-3 flex items-center justify-between gap-4 border-b border-border pb-3">
+                <div className="min-w-0">
+                  <h2 className="truncate text-base font-semibold">{section.departmentName}</h2>
+                </div>
+                <span className="text-sm text-muted-foreground">
+                  Сотрудников: {section.peopleCount}
+                </span>
+              </header>
+
+              <div className="space-y-0.5">
+                {section.sectionTree.map((node) => (
+                  <TreeNode
+                    key={node.id}
+                    node={node}
+                    showDepartmentBadge={section.departmentName === "Без отдела"}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

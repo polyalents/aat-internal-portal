@@ -13,6 +13,11 @@ export interface EmployeeBindingUpdate {
   user_id: string | null
 }
 
+export interface DepartmentAdminPayload {
+  name: string
+  head_id?: string | null
+}
+
 export interface EmployeeAdminCreatePayload {
   first_name: string
   last_name: string
@@ -121,4 +126,21 @@ export async function updateEmployeeBinding(
 export async function getAdminDepartments(): Promise<Department[]> {
   const { data } = await client.get<Department[]>("/departments/")
   return data
+}
+
+export async function createAdminDepartment(payload: DepartmentAdminPayload): Promise<Department> {
+  const { data } = await client.post<Department>("/departments/", payload)
+  return data
+}
+
+export async function updateAdminDepartment(
+  id: string,
+  payload: DepartmentAdminPayload
+): Promise<Department> {
+  const { data } = await client.patch<Department>(`/departments/${id}`, payload)
+  return data
+}
+
+export async function deleteAdminDepartment(id: string): Promise<void> {
+  await client.delete(`/departments/${id}`)
 }

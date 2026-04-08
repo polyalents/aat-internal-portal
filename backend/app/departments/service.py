@@ -1,10 +1,13 @@
 from uuid import UUID
 
+from fastapi import HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.departments.models import Department
 from app.departments.schemas import DepartmentCreate, DepartmentUpdate
+from app.employees.models import Employee
 
 
 async def get_departments(db: AsyncSession) -> list[Department]:
@@ -18,21 +21,55 @@ async def get_department_by_id(db: AsyncSession, dept_id: UUID) -> Department | 
 
 
 async def create_department(db: AsyncSession, data: DepartmentCreate) -> Department:
-    dept = Department(name=data.name, head_id=data.head_id)
+    dept = Department(name=data.name.strip(), head_id=data.head_id)
     db.add(dept)
-    await db.flush()
-    await db.refresh(dept)
-    return dept
+    try:
+        await db.flush()
+        await db.refresh(dept)
+        return dept
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Отдел с таким названием уже существует",
+        ) from exc
 
 
 async def update_department(db: AsyncSession, dept: Department, data: DepartmentUpdate) -> Department:
-    for field, value in data.model_dump(exclude_unset=True).items():
+    update_data = data.model_dump(exclude_unset=True)
+    if "name" in update_data and update_data["name"] is not None:
+        update_data["name"] = update_data["name"].strip()
+
+    for field, value in update_data.items():
         setattr(dept, field, value)
-    await db.flush()
-    await db.refresh(dept)
-    return dept
+    try:
+        await db.flush()
+        await db.refresh(dept)
+        return dept
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Отдел с таким названием уже существует",
+        ) from exc
 
 
 async def delete_department(db: AsyncSession, dept: Department) -> None:
-    await db.delete(dept)
-    await db.flush()
+    linked_employee = await db.execute(
+        select(Employee.id).where(Employee.department_id == dept.id).limit(1)
+    )
+    if linked_employee.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Нельзя удалить отдел: в нём есть сотрудники",
+        )
+
+    try:
+        await db.delete(dept)
+        await db.flush()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Нельзя удалить отдел: есть связанные данные",
+        ) from exc

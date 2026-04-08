@@ -25,6 +25,7 @@ import ProfilePage from "@/pages/ProfilePage"
 import AdminPage from "@/pages/admin/AdminPage"
 import AdminUsersPage from "@/pages/admin/AdminUsersPage"
 import AdminEmployeesPage from "@/pages/admin/AdminEmployeesPage"
+import AdminDepartmentsPage from "@/pages/admin/AdminDepartmentsPage"
 
 function LoadingScreen() {
   return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Загрузка...</div>
@@ -99,6 +100,7 @@ export default function App() {
             <Route index element={<Navigate to="users" replace />} />
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="employees" element={<AdminEmployeesPage />} />
+            <Route path="departments" element={<AdminDepartmentsPage />} />
           </Route>
         </Route>
 

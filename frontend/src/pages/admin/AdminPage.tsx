@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 const tabs = [
   { to: "/admin/users", label: "Учётные записи" },
   { to: "/admin/employees", label: "Карточки сотрудников" },
+  { to: "/admin/departments", label: "Отделы" },
 ]
 
 export default function AdminPage() {
@@ -12,7 +13,7 @@ export default function AdminPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Администрирование</h1>
-        <p className="text-muted-foreground">Управление учётными записями для входа и карточками сотрудников.</p>
+        <p className="text-muted-foreground">Управление учётными записями, карточками сотрудников и отделами.</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
