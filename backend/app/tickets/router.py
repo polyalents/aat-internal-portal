@@ -68,7 +68,21 @@ def _ticket_to_read(ticket) -> TicketRead:
         assignee_id=ticket.assignee_id,
         assignee_name=ticket.assignee.username if ticket.assignee else None,
         contact_phone=ticket.contact_phone,
+        internal_phone=ticket.internal_phone,
+        room_number=ticket.room_number,
         contact_email=ticket.contact_email,
+        attachments=[
+            AttachmentRead(
+                id=attachment.id,
+                ticket_id=attachment.ticket_id,
+                filename=attachment.filename,
+                file_path=attachment.file_path,
+                file_size=attachment.file_size,
+                content_type=attachment.content_type,
+                uploaded_at=attachment.uploaded_at,
+            )
+            for attachment in (ticket.attachments or [])
+        ],
         is_archived=ticket.is_archived,
         archived_at=ticket.archived_at,
         created_at=ticket.created_at,
@@ -318,15 +332,8 @@ async def list_comments(
     if ticket is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
 
-    can_read_comments = False
-    if current_user.role == UserRole.admin:
-        can_read_comments = True
-    elif current_user.role == UserRole.it_specialist:
-        can_read_comments = True
-    elif current_user.role == UserRole.employee:
-        can_read_comments = ticket.author_id == current_user.id
-
-    if not can_read_comments:
+    can_access_comments = ticket.author_id == current_user.id or ticket.assignee_id == current_user.id
+    if not can_access_comments:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     comments = await get_comments(db, ticket_id)
@@ -354,15 +361,8 @@ async def create_comment(
     if ticket is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
 
-    can_write_comment = False
-    if current_user.role == UserRole.admin:
-        can_write_comment = True
-    elif current_user.role == UserRole.it_specialist:
-        can_write_comment = ticket.author_id == current_user.id or ticket.assignee_id == current_user.id
-    elif current_user.role == UserRole.employee:
-        can_write_comment = ticket.author_id == current_user.id
-
-    if not can_write_comment:
+    can_access_comments = ticket.author_id == current_user.id or ticket.assignee_id == current_user.id
+    if not can_access_comments:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     comment = await add_comment(db, ticket_id, current_user.id, body.text)

@@ -77,6 +77,8 @@ class Ticket(Base):
     )
 
     contact_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    internal_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    room_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
     contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)

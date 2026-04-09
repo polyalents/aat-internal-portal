@@ -8,6 +8,7 @@ import type {
   TicketStats,
   TicketAssigneeOption,
   PaginatedResponse,
+  TicketAttachment,
 } from "@/shared/types"
 
 export async function getTickets(params?: {
@@ -94,7 +95,7 @@ export async function getTicketAssignees(): Promise<TicketAssigneeOption[]> {
   return data
 }
 
-export async function uploadAttachment(ticketId: string, file: File) {
+export async function uploadAttachment(ticketId: string, file: File): Promise<TicketAttachment> {
   const form = new FormData()
   form.append("file", file)
 

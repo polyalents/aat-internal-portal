@@ -130,7 +130,10 @@ export interface Ticket {
   assignee_id: string | null
   assignee_name: string | null
   contact_phone: string | null
+  internal_phone: string | null
+  room_number: string | null
   contact_email: string | null
+  attachments: TicketAttachment[]
   created_at: string
   updated_at: string
   escalated_at: string | null
@@ -145,7 +148,19 @@ export interface TicketCreate {
   category_id: string
   priority: TicketPriority
   contact_phone?: string
+  internal_phone?: string
+  room_number?: string
   contact_email?: string
+}
+
+export interface TicketAttachment {
+  id: string
+  ticket_id: string
+  filename: string
+  file_path: string
+  file_size: number
+  content_type: string
+  uploaded_at: string
 }
 
 export interface TicketComment {

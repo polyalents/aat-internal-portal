@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.announcements.schemas import AnnouncementRead
@@ -9,7 +9,7 @@ from app.dependencies import get_current_user
 from app.employees.schemas import BirthdayEntry
 from app.employees.service import get_birthdays
 from app.tickets.enums import TicketPriority, TicketStatus
-from app.tickets.schemas import TicketRead, TicketStats
+from app.tickets.schemas import AttachmentRead, TicketRead, TicketStats
 from app.tickets.service import get_ticket_stats, get_tickets
 from app.users.models import User, UserRole
 
@@ -41,7 +41,23 @@ def _ticket_to_read(ticket) -> TicketRead:
         assignee_id=ticket.assignee_id,
         assignee_name=ticket.assignee.username if ticket.assignee else None,
         contact_phone=ticket.contact_phone,
+        internal_phone=ticket.internal_phone,
+        room_number=ticket.room_number,
         contact_email=ticket.contact_email,
+        attachments=[
+            AttachmentRead(
+                id=attachment.id,
+                ticket_id=attachment.ticket_id,
+                filename=attachment.filename,
+                file_path=attachment.file_path,
+                file_size=attachment.file_size,
+                content_type=attachment.content_type,
+                uploaded_at=attachment.uploaded_at,
+            )
+            for attachment in (ticket.attachments or [])
+        ],
+        is_archived=ticket.is_archived,
+        archived_at=ticket.archived_at,
         created_at=ticket.created_at,
         updated_at=ticket.updated_at,
         escalated_at=ticket.escalated_at,
@@ -130,4 +146,4 @@ async def get_dashboard(
         recent_announcements=recent_announcements,
         unassigned_tickets=unassigned_tickets,
         urgent_tickets=urgent_tickets,
-    ) 
+    )

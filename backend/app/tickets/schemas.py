@@ -37,7 +37,10 @@ class TicketRead(BaseModel):
     assignee_id: UUID | None
     assignee_name: str | None = None
     contact_phone: str | None
+    internal_phone: str | None
+    room_number: str | None
     contact_email: EmailStr | None
+    attachments: list["AttachmentRead"] = []
     is_archived: bool = False
     archived_at: datetime | None = None
     created_at: datetime
@@ -54,6 +57,8 @@ class TicketCreate(BaseModel):
     category_id: UUID
     priority: TicketPriority = TicketPriority.normal
     contact_phone: str | None = Field(None, max_length=50)
+    internal_phone: str | None = Field(None, max_length=50)
+    room_number: str | None = Field(None, max_length=50)
     contact_email: EmailStr | None = None
 
 
@@ -102,6 +107,7 @@ class AttachmentRead(BaseModel):
     id: UUID
     ticket_id: UUID
     filename: str
+    file_path: str
     file_size: int
     content_type: str
     uploaded_at: datetime

@@ -1,7 +1,13 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 
-import type { Ticket, TicketAssigneeOption, TicketComment, TicketHistory, TicketStatus } from "@/shared/types"
+import type {
+  Ticket,
+  TicketAssigneeOption,
+  TicketComment,
+  TicketHistory,
+  TicketStatus,
+} from "@/shared/types"
 import {
   PRIORITY_COLORS,
   PRIORITY_LABELS,
@@ -10,17 +16,16 @@ import {
   cn,
   formatDateTime,
 } from "@/lib/utils"
-
 import {
+  addTicketComment,
   archiveTicket,
   deleteTicketPermanently,
   getTicket,
-  updateTicket,
-  getTicketComments,
-  addTicketComment,
   getTicketAssignees,
+  getTicketComments,
   getTicketHistory,
   restoreTicket,
+  updateTicket,
 } from "@/shared/api/tickets"
 import { useAuthStore } from "@/features/auth/store"
 
@@ -53,8 +58,11 @@ export default function TicketDetailPage() {
   const [ticket, setTicket] = useState<Ticket | null>(null)
   const [comments, setComments] = useState<TicketComment[]>([])
   const [history, setHistory] = useState<TicketHistory[]>([])
+  const [assignees, setAssignees] = useState<TicketAssigneeOption[]>([])
 
   const [newComment, setNewComment] = useState("")
+  const [selectedAssigneeId, setSelectedAssigneeId] = useState("")
+
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -63,24 +71,57 @@ export default function TicketDetailPage() {
   const [commentSending, setCommentSending] = useState(false)
   const [archiveLoading, setArchiveLoading] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
-  const [assignees, setAssignees] = useState<TicketAssigneeOption[]>([])
-  const [selectedAssigneeId, setSelectedAssigneeId] = useState("")
 
   const availableNextStatuses = useMemo(() => {
     if (!ticket) return []
     return ALLOWED_STATUS_TRANSITIONS[ticket.status] ?? []
   }, [ticket])
 
-  useEffect(() => {
-    if (!id) {
-      navigate("/tickets", { replace: true })
+  const loadComments = useCallback(async (ticketId: string) => {
+    try {
+      const data = await getTicketComments(ticketId)
+      setComments(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.warn("TICKET COMMENTS LOAD WARNING:", err)
+      setComments([])
+    }
+  }, [])
+
+  const loadHistory = useCallback(async (ticketId: string) => {
+    try {
+      const data = await getTicketHistory(ticketId)
+      setHistory(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.warn("TICKET HISTORY LOAD WARNING:", err)
+      setHistory([])
+    }
+  }, [])
+
+  const loadAssignees = useCallback(async () => {
+    if (!isIT) {
+      setAssignees([])
       return
     }
 
-    void loadData()
-  }, [id, navigate])
+    try {
+      const data = await getTicketAssignees()
+      setAssignees(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.warn("TICKET ASSIGNEES LOAD WARNING:", err)
+      setAssignees([])
+    }
+  }, [isIT])
 
-  async function loadData() {
+  const refreshHistorySafe = useCallback(async (ticketId: string) => {
+    try {
+      const data = await getTicketHistory(ticketId)
+      setHistory(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.warn("TICKET HISTORY REFRESH WARNING:", err)
+    }
+  }, [])
+
+  const loadData = useCallback(async () => {
     if (!id) return
 
     try {
@@ -91,50 +132,42 @@ export default function TicketDetailPage() {
       setTicket(ticketData)
       setSelectedAssigneeId(ticketData.assignee_id ?? "")
 
-      try {
-        const commentsData = await getTicketComments(id)
-        setComments(commentsData)
-      } catch (commentsErr) {
-        console.warn("COMMENTS LOAD WARNING:", commentsErr)
-        setComments([])
-      }
-
-      try {
-        const historyData = await getTicketHistory(id)
-        setHistory(historyData)
-      } catch (historyErr) {
-        console.warn("HISTORY LOAD WARNING:", historyErr)
-        setHistory([])
-      }
-
-      if (isIT) {
-        try {
-          const options = await getTicketAssignees()
-          setAssignees(options)
-        } catch (assigneesErr) {
-          console.warn("ASSIGNEES LOAD WARNING:", assigneesErr)
-          setAssignees([])
-        }
-      }
+      await Promise.allSettled([
+        loadComments(id),
+        loadHistory(id),
+        loadAssignees(),
+      ])
     } catch (err) {
       console.error("TICKET DETAIL ERROR:", err)
       setError("Не удалось загрузить заявку")
     } finally {
       setLoading(false)
     }
-  }
+  }, [id, loadAssignees, loadComments, loadHistory])
+
+  useEffect(() => {
+    if (!id) {
+      navigate("/tickets", { replace: true })
+      return
+    }
+
+    void loadData()
+  }, [id, navigate, loadData])
 
   async function handleAssigneeChange() {
     if (!ticket || !isIT) return
+
     try {
       setAssigning(true)
-      const updated = await updateTicket(ticket.id, { assignee_id: selectedAssigneeId || null })
+      const updated = await updateTicket(ticket.id, {
+        assignee_id: selectedAssigneeId || null,
+      })
       setTicket(updated)
-      const freshHistory = await getTicketHistory(ticket.id)
-      setHistory(freshHistory)
+      await refreshHistorySafe(ticket.id)
     } catch (err: any) {
       console.error("ASSIGN ERROR:", err)
-      const backendMessage = err?.response?.data?.detail || err?.message || "Ошибка назначения исполнителя"
+      const backendMessage =
+        err?.response?.data?.detail || err?.message || "Ошибка назначения исполнителя"
       alert(String(backendMessage))
     } finally {
       setAssigning(false)
@@ -142,19 +175,17 @@ export default function TicketDetailPage() {
   }
 
   async function handleStatusChange(nextStatus: TicketStatus) {
-    if (!ticket || !isIT) return
-    if (nextStatus === ticket.status) return
+    if (!ticket || !isIT || nextStatus === ticket.status) return
 
     try {
       setStatusUpdating(true)
       const updated = await updateTicket(ticket.id, { status: nextStatus })
       setTicket(updated)
-
-      const freshHistory = await getTicketHistory(ticket.id)
-      setHistory(freshHistory)
+      await refreshHistorySafe(ticket.id)
     } catch (err: any) {
       console.error("STATUS UPDATE ERROR:", err)
-      const backendMessage = err?.response?.data?.detail || err?.message || "Ошибка смены статуса"
+      const backendMessage =
+        err?.response?.data?.detail || err?.message || "Ошибка смены статуса"
       alert(String(backendMessage))
     } finally {
       setStatusUpdating(false)
@@ -171,9 +202,11 @@ export default function TicketDetailPage() {
       const comment = await addTicketComment(id, text)
       setComments((prev) => [...prev, comment])
       setNewComment("")
+      await refreshHistorySafe(id)
     } catch (err: any) {
       console.error("ADD COMMENT ERROR:", err)
-      const backendMessage = err?.response?.data?.detail || err?.message || "Ошибка добавления комментария"
+      const backendMessage =
+        err?.response?.data?.detail || err?.message || "Ошибка добавления комментария"
       alert(String(backendMessage))
     } finally {
       setCommentSending(false)
@@ -188,8 +221,7 @@ export default function TicketDetailPage() {
       setArchiveLoading(true)
       const updated = await archiveTicket(ticket.id)
       setTicket(updated)
-      const freshHistory = await getTicketHistory(ticket.id)
-      setHistory(freshHistory)
+      await refreshHistorySafe(ticket.id)
     } catch (err: any) {
       console.error("ARCHIVE ERROR:", err)
       alert(String(err?.response?.data?.detail || "Не удалось архивировать заявку"))
@@ -205,8 +237,7 @@ export default function TicketDetailPage() {
       setArchiveLoading(true)
       const updated = await restoreTicket(ticket.id)
       setTicket(updated)
-      const freshHistory = await getTicketHistory(ticket.id)
-      setHistory(freshHistory)
+      await refreshHistorySafe(ticket.id)
     } catch (err: any) {
       console.error("RESTORE ERROR:", err)
       alert(String(err?.response?.data?.detail || "Не удалось восстановить заявку"))
@@ -261,7 +292,10 @@ export default function TicketDetailPage() {
     )
   }
 
-  const canArchive = isIT && !ticket.is_archived && ["completed", "rejected"].includes(ticket.status)
+  const safeAttachments = Array.isArray(ticket.attachments) ? ticket.attachments : []
+
+  const canArchive =
+    isIT && !ticket.is_archived && ["completed", "rejected"].includes(ticket.status)
   const canRestore = isIT && ticket.is_archived
   const canDeletePermanently = isAdmin && ticket.is_archived
 
@@ -272,11 +306,21 @@ export default function TicketDetailPage() {
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <span className="text-sm text-muted-foreground">#{ticket.number}</span>
 
-            <span className={cn("rounded-full px-2 py-1 text-xs font-medium", STATUS_COLORS[ticket.status])}>
+            <span
+              className={cn(
+                "rounded-full px-2 py-1 text-xs font-medium",
+                STATUS_COLORS[ticket.status]
+              )}
+            >
               {STATUS_LABELS[ticket.status]}
             </span>
 
-            <span className={cn("rounded-full px-2 py-1 text-xs font-medium", PRIORITY_COLORS[ticket.priority])}>
+            <span
+              className={cn(
+                "rounded-full px-2 py-1 text-xs font-medium",
+                PRIORITY_COLORS[ticket.priority]
+              )}
+            >
               {PRIORITY_LABELS[ticket.priority]}
             </span>
 
@@ -294,7 +338,7 @@ export default function TicketDetailPage() {
           )}
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {canArchive && (
             <button
               type="button"
@@ -336,11 +380,13 @@ export default function TicketDetailPage() {
             <p className="mb-2 text-sm font-medium">Сменить статус</p>
 
             {availableNextStatuses.length === 0 ? (
-              <div className="text-sm text-muted-foreground">Для текущего статуса переходов больше нет</div>
+              <div className="text-sm text-muted-foreground">
+                Для текущего статуса переходов больше нет
+              </div>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {availableNextStatuses.map((status) => {
-                  const option = STATUS_OPTIONS.find((s) => s.value == status)
+                  const option = STATUS_OPTIONS.find((s) => s.value === status)
                   if (!option) return null
 
                   return (
@@ -369,13 +415,18 @@ export default function TicketDetailPage() {
               >
                 <option value="">Не назначен</option>
                 {assignees.map((option) => (
-                  <option key={option.user_id} value={option.user_id} disabled={!option.is_available}>
+                  <option
+                    key={option.user_id}
+                    value={option.user_id}
+                    disabled={!option.is_available}
+                  >
                     {option.full_name || option.username}
                     {option.is_it_manager ? " (IT-менеджер)" : ""}
                     {option.is_on_vacation ? " — недоступен (отпуск)" : ""}
                   </option>
                 ))}
               </select>
+
               <button
                 type="button"
                 disabled={assigning}
@@ -385,6 +436,7 @@ export default function TicketDetailPage() {
                 {assigning ? "Сохранение..." : "Назначить"}
               </button>
             </div>
+
             <p className="mt-2 text-xs text-muted-foreground">
               Для назначения доступны только IT-специалисты и IT-менеджер, сотрудники в отпуске недоступны.
             </p>
@@ -429,6 +481,16 @@ export default function TicketDetailPage() {
             <p>{ticket.contact_phone ?? "—"}</p>
           </div>
 
+          <div>
+            <p className="text-muted-foreground">Внутренний телефон</p>
+            <p>{ticket.internal_phone ?? "—"}</p>
+          </div>
+
+          <div>
+            <p className="text-muted-foreground">Кабинет</p>
+            <p>{ticket.room_number ?? "—"}</p>
+          </div>
+
           {ticket.archived_at && (
             <div>
               <p className="text-muted-foreground">Архивировано</p>
@@ -436,6 +498,32 @@ export default function TicketDetailPage() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="space-y-4 rounded-xl border border-border bg-card p-6">
+        <h2 className="text-lg font-semibold">Вложения</h2>
+
+        {safeAttachments.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Нет вложений</p>
+        ) : (
+          <div className="space-y-2">
+            {safeAttachments.map((attachment) => (
+              <a
+                key={attachment.id}
+                href={attachment.file_path}
+                target="_blank"
+                rel="noreferrer"
+                className="block rounded-lg border border-border p-3 text-sm"
+              >
+                <div className="font-medium">{attachment.filename}</div>
+                <div className="text-xs text-muted-foreground">
+                  {(attachment.file_size / 1024).toFixed(1)} KB ·{" "}
+                  {formatDateTime(attachment.uploaded_at)}
+                </div>
+              </a>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="space-y-4 rounded-xl border border-border bg-card p-6">
@@ -449,7 +537,9 @@ export default function TicketDetailPage() {
               <div key={item.id} className="rounded-lg border border-border p-3 text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-medium">{item.changed_by_name ?? "Неизвестно"}</span>
-                  <span className="text-xs text-muted-foreground">{formatDateTime(item.created_at)}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatDateTime(item.created_at)}
+                  </span>
                 </div>
 
                 <p className="mt-2 text-muted-foreground">
@@ -480,7 +570,9 @@ export default function TicketDetailPage() {
               <div key={comment.id} className="rounded-lg border border-border p-3 text-sm">
                 <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
                   <span className="font-medium">{comment.author_name ?? "Неизвестно"}</span>
-                  <span className="text-xs text-muted-foreground">{formatDateTime(comment.created_at)}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatDateTime(comment.created_at)}
+                  </span>
                 </div>
 
                 <p className="whitespace-pre-wrap">{comment.text}</p>

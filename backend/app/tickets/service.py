@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.tickets.enums import ALLOWED_TRANSITIONS, TicketPriority, TicketStatus
-from app.tickets.models import Ticket, TicketAttachment, TicketCategory, TicketComment, TicketHistory
+from app.tickets.models import Ticket, TicketCategory, TicketComment, TicketHistory
 from app.tickets.schemas import TicketCreate, TicketStats, TicketUpdate
 from app.users.models import User, UserRole
 
@@ -67,6 +67,7 @@ async def get_tickets(
         selectinload(Ticket.category),
         selectinload(Ticket.author),
         selectinload(Ticket.assignee),
+        selectinload(Ticket.attachments),
     )
     count_stmt = select(func.count()).select_from(Ticket)
 
@@ -126,6 +127,8 @@ async def create_ticket(db: AsyncSession, data: TicketCreate, author: User) -> T
         priority=data.priority,
         author_id=author.id,
         contact_phone=data.contact_phone.strip() if data.contact_phone else None,
+        internal_phone=data.internal_phone.strip() if data.internal_phone else None,
+        room_number=data.room_number.strip() if data.room_number else None,
         contact_email=str(data.contact_email).lower() if data.contact_email else None,
     )
     db.add(ticket)
