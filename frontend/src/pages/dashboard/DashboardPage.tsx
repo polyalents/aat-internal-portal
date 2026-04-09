@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
-import { AlertTriangle, Ticket, Cake } from "lucide-react"
+import { AlertTriangle, Ticket, Cake, Briefcase } from "lucide-react"
 
 import { useAuthStore } from "@/features/auth/store"
 import type { BirthdayEntry, Dashboard } from "@/shared/types"
@@ -118,6 +118,43 @@ export default function DashboardPage() {
         </section>
       )}
 
+      {isIT() && data.assigned_tickets.length > 0 && (
+        <section className="space-y-3 rounded-lg border border-border p-4">
+          <h2 className="flex items-center gap-2 font-semibold">
+            <Briefcase className="h-4 w-4 text-blue-500" />
+            Мои принятые в работу ({data.assigned_tickets.length})
+          </h2>
+
+          <div className="space-y-2">
+            {data.assigned_tickets.slice(0, 5).map((t) => (
+              <Link
+                key={t.id}
+                to={`/tickets/${t.id}`}
+                className="flex items-center justify-between rounded-md border border-border p-3 transition-colors hover:bg-accent"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">
+                    #{t.number} {t.subject}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatRelative(t.created_at)}
+                  </p>
+                </div>
+
+                <span
+                  className={cn(
+                    "whitespace-nowrap rounded-full px-2 py-0.5 text-xs",
+                    STATUS_COLORS[t.status]
+                  )}
+                >
+                  {STATUS_LABELS[t.status]}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       <div className="grid gap-6 md:grid-cols-2">
         <section className="space-y-3 rounded-lg border border-border p-4">
           <h2 className="flex items-center gap-2 font-semibold">
@@ -172,7 +209,7 @@ export default function DashboardPage() {
             <div>
               <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Сегодня</p>
               {data.birthdays_today.length === 0 ? (
-                <p className="text-muted-foreground">Нет именинникв</p>
+                <p className="text-muted-foreground">Нет именинников</p>
               ) : (
                 <ul className="space-y-1">
                   {data.birthdays_today.slice(0, 3).map((item) => (

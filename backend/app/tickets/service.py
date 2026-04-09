@@ -62,6 +62,7 @@ async def get_tickets(
     unassigned_only: bool = False,
     search: str | None = None,
     archived: bool = False,
+    my_work_only: bool = False,
 ) -> tuple[list[Ticket], int]:
     stmt = select(Ticket).options(
         selectinload(Ticket.category),
@@ -83,6 +84,17 @@ async def get_tickets(
         filters.append(Ticket.assignee_id == assignee_id)
     if unassigned_only:
         filters.append(Ticket.assignee_id.is_(None))
+    if my_work_only:
+        filters.append(Ticket.assignee_id.is_not(None))
+        filters.append(
+            Ticket.status.in_(
+                [
+                    TicketStatus.in_progress,
+                    TicketStatus.waiting,
+                    TicketStatus.escalated,
+                ]
+            )
+        )
     if search:
         pattern = f"%{search.strip()}%"
         filters.append(or_(Ticket.subject.ilike(pattern), Ticket.description.ilike(pattern)))
@@ -145,10 +157,11 @@ async def get_ticket_assignees(db: AsyncSession) -> list[dict]:
             User.is_active.is_(True),
             or_(
                 User.role == UserRole.it_specialist,
+                User.role == UserRole.admin,
                 User.is_it_manager.is_(True),
             ),
         )
-        .order_by(User.is_it_manager.desc(), User.username)
+        .order_by(User.role, User.is_it_manager.desc(), User.username)
     )
     users = list(result.scalars().all())
 
@@ -219,8 +232,8 @@ async def update_ticket(
             if assignee is None:
                 raise ValueError("Исполнитель не найден или неактивен")
 
-            if assignee.role != UserRole.it_specialist and not assignee.is_it_manager:
-                raise ValueError("Исполнителем может быть только IT-специалист")
+            if assignee.role not in (UserRole.it_specialist, UserRole.admin) and not assignee.is_it_manager:
+                raise ValueError("Исполнителем может быть только IT-специалист, IT-менеджер или администратор")
 
             if assignee.employee is not None and assignee.employee.is_on_vacation:
                 raise ValueError("Нельзя назначить сотрудника, который находится в отпуске")

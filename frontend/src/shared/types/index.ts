@@ -253,6 +253,7 @@ export interface Dashboard {
   recent_announcements: Announcement[]
   unassigned_tickets: Ticket[]
   urgent_tickets: Ticket[]
+  assigned_tickets: Ticket[]
 }
 
 // === Pagination ===

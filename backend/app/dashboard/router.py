@@ -24,6 +24,7 @@ class DashboardResponse(BaseModel):
     recent_announcements: list[AnnouncementRead]
     unassigned_tickets: list[TicketRead] = Field(default_factory=list)
     urgent_tickets: list[TicketRead] = Field(default_factory=list)
+    assigned_tickets: list[TicketRead] = Field(default_factory=list)
 
 
 def _ticket_to_read(ticket) -> TicketRead:
@@ -112,6 +113,7 @@ async def get_dashboard(
 
     unassigned_tickets: list[TicketRead] = []
     urgent_tickets: list[TicketRead] = []
+    assigned_tickets: list[TicketRead] = []
 
     if is_it:
         new_ticket_rows, _ = await get_tickets(
@@ -138,6 +140,18 @@ async def get_dashboard(
             if ticket.status not in (TicketStatus.completed, TicketStatus.rejected)
         ]
 
+        assigned_ticket_rows, _ = await get_tickets(
+            db,
+            page=1,
+            size=10,
+            assignee_id=current_user.id,
+        )
+        assigned_tickets = [
+            _ticket_to_read(ticket)
+            for ticket in assigned_ticket_rows
+            if ticket.status not in (TicketStatus.completed, TicketStatus.rejected)
+        ]
+
     return DashboardResponse(
         ticket_stats=ticket_stats,
         recent_tickets=recent_tickets,
@@ -146,4 +160,5 @@ async def get_dashboard(
         recent_announcements=recent_announcements,
         unassigned_tickets=unassigned_tickets,
         urgent_tickets=urgent_tickets,
+        assigned_tickets=assigned_tickets,
     )

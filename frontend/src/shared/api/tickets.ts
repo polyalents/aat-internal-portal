@@ -19,6 +19,7 @@ export async function getTickets(params?: {
   search?: string
   archived?: boolean
   unassigned_only?: boolean
+  assigned_to_me?: boolean
 }): Promise<PaginatedResponse<Ticket>> {
   const { data } = await client.get("/tickets", { params })
   return data

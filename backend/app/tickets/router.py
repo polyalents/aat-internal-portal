@@ -132,10 +132,17 @@ async def list_tickets(
     search: str | None = Query(None, max_length=300),
     unassigned_only: bool = Query(False),
     archived: bool = Query(False),
+    assigned_to_me: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> TicketListResponse:
-    author_id = current_user.id if current_user.role == UserRole.employee else None
+    author_id = None
+    assignee_id = None
+
+    if current_user.role == UserRole.employee:
+        author_id = current_user.id
+    elif assigned_to_me:
+        assignee_id = current_user.id
 
     tickets, total = await get_tickets(
         db,
@@ -144,6 +151,7 @@ async def list_tickets(
         status=ticket_status,
         priority=priority,
         author_id=author_id,
+        assignee_id=assignee_id,
         search=search,
         unassigned_only=unassigned_only,
         archived=archived,
@@ -332,7 +340,11 @@ async def list_comments(
     if ticket is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
 
-    can_access_comments = ticket.author_id == current_user.id or ticket.assignee_id == current_user.id
+    can_access_comments = (
+        ticket.author_id == current_user.id
+        or ticket.assignee_id == current_user.id
+        or current_user.role in (UserRole.it_specialist, UserRole.admin)
+    )
     if not can_access_comments:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
@@ -361,7 +373,11 @@ async def create_comment(
     if ticket is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
 
-    can_access_comments = ticket.author_id == current_user.id or ticket.assignee_id == current_user.id
+    can_access_comments = (
+        ticket.author_id == current_user.id
+        or ticket.assignee_id == current_user.id
+        or current_user.role in (UserRole.it_specialist, UserRole.admin)
+    )
     if not can_access_comments:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 

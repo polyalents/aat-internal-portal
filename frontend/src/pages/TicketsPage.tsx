@@ -10,6 +10,7 @@ import {
   XCircle,
   ArrowUpCircle,
   Archive,
+  Briefcase,
 } from "lucide-react"
 
 import type { Ticket as TicketType } from "@/shared/types"
@@ -26,7 +27,6 @@ import { useAuthStore } from "@/features/auth/store"
 
 const STATUS_FILTER_OPTIONS = [
   { value: "", label: "Все статусы" },
-  { value: "new_unassigned", label: "Новые без исполнителя" },
   { value: "new", label: "Новые" },
   { value: "in_progress", label: "В работе" },
   { value: "waiting", label: "Ожидание" },
@@ -43,6 +43,8 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
   completed: <CheckCircle2 className="h-4 w-4" />,
   rejected: <XCircle className="h-4 w-4" />,
 }
+
+type TicketScope = "all" | "unassigned" | "assigned"
 
 export default function TicketsPage() {
   const navigate = useNavigate()
@@ -62,6 +64,9 @@ export default function TicketsPage() {
   const [page, setPage] = useState(Number(searchParams.get("page")) || 1)
   const [archived, setArchived] = useState(searchParams.get("archived") === "true")
   const [cleanupLoading, setCleanupLoading] = useState(false)
+  const [scope, setScope] = useState<TicketScope>(
+    (searchParams.get("scope") as TicketScope) || "all"
+  )
 
   const fetchTickets = useCallback(async () => {
     setLoading(true)
@@ -75,19 +80,28 @@ export default function TicketsPage() {
         search?: string
         archived?: boolean
         unassigned_only?: boolean
+        assigned_to_me?: boolean
       } = {
         page,
         size: 20,
         archived,
       }
 
-      if (status === "new_unassigned") {
-        params.status = "new"
-        params.unassigned_only = true
-      } else if (status) {
+      if (status) {
         params.status = status
       }
-      if (search.trim()) params.search = search.trim()
+      if (search.trim()) {
+        params.search = search.trim()
+      }
+
+      if (isIT) {
+        if (scope === "unassigned") {
+          params.status = "new"
+          params.unassigned_only = true
+        } else if (scope === "assigned") {
+          params.assigned_to_me = true
+        }
+      }
 
       const res = await getTickets(params)
 
@@ -99,7 +113,7 @@ export default function TicketsPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, status, search, archived])
+  }, [page, status, search, archived, isIT, scope])
 
   useEffect(() => {
     void fetchTickets()
@@ -112,9 +126,10 @@ export default function TicketsPage() {
     if (search) params.search = search
     if (page > 1) params.page = String(page)
     if (archived) params.archived = "true"
+    if (isIT && scope !== "all") params.scope = scope
 
     setSearchParams(params, { replace: true })
-  }, [status, search, page, archived, setSearchParams])
+  }, [status, search, page, archived, scope, isIT, setSearchParams])
 
   async function handleCleanup() {
     if (!confirm("Удалить старые архивные заявки из базы?")) return
@@ -140,7 +155,15 @@ export default function TicketsPage() {
         <div>
           <h1 className="text-2xl font-bold">Заявки</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {archived ? "Архив заявок" : isIT ? "Все заявки системы" : "Мои заявки"}
+            {archived
+              ? "Архив заявок"
+              : isIT
+                ? scope === "assigned"
+                  ? "Мои заявки, принятые в работу"
+                  : scope === "unassigned"
+                    ? "Новые заявки без исполнителя"
+                    : "Все заявки системы"
+                : "Мои заявки"}
           </p>
         </div>
 
@@ -174,6 +197,53 @@ export default function TicketsPage() {
           </button>
         </div>
       </div>
+
+      {isIT && !archived && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setScope("all")
+              setPage(1)
+            }}
+            className={cn(
+              "rounded-lg border px-4 py-2 text-sm transition",
+              scope === "all" ? "bg-primary text-white" : "hover:bg-accent"
+            )}
+          >
+            Все заявки
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setScope("unassigned")
+              setPage(1)
+            }}
+            className={cn(
+              "rounded-lg border px-4 py-2 text-sm transition",
+              scope === "unassigned" ? "bg-primary text-white" : "hover:bg-accent"
+            )}
+          >
+            Без исполнителя
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setScope("assigned")
+              setPage(1)
+            }}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition",
+              scope === "assigned" ? "bg-primary text-white" : "hover:bg-accent"
+            )}
+          >
+            <Briefcase className="h-4 w-4" />
+            Мои принятые
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <div className="relative min-w-0 flex-1">
@@ -215,7 +285,11 @@ export default function TicketsPage() {
         <div className="rounded-xl border py-16 text-center">
           <Ticket className="mx-auto mb-3 text-muted-foreground" />
           <p className="text-muted-foreground">
-            {search || status ? "Ничего не найдено" : archived ? "Архив пуст" : "Заявок пока нет"}
+            {search || status
+              ? "Ничего не найдено"
+              : archived
+                ? "Архив пуст"
+                : "Заявок пока нет"}
           </p>
         </div>
       ) : (
