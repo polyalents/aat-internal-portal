@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -17,6 +18,7 @@ from app.tickets.schemas import (
     TicketCategoryCreate,
     TicketCategoryRead,
     TicketCategoryUpdate,
+    TicketAssigneeOption,
     TicketCreate,
     TicketListResponse,
     TicketRead,
@@ -35,15 +37,18 @@ from app.tickets.service import (
     get_comments,
     get_history,
     get_ticket_by_id,
+    get_ticket_assignees,
     get_ticket_stats,
     get_tickets,
     restore_ticket,
     update_category,
     update_ticket,
 )
+from app.tasks.celery_app import celery_app
 from app.users.models import User, UserRole
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 MAX_TOTAL_ATTACHMENT_SIZE = settings.max_upload_size_mb * 1024 * 1024
 
@@ -111,6 +116,7 @@ async def list_tickets(
     ticket_status: TicketStatus | None = Query(None, alias="status"),
     priority: TicketPriority | None = Query(None),
     search: str | None = Query(None, max_length=300),
+    unassigned_only: bool = Query(False),
     archived: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -125,6 +131,7 @@ async def list_tickets(
         priority=priority,
         author_id=author_id,
         search=search,
+        unassigned_only=unassigned_only,
         archived=archived,
     )
     items = [_ticket_to_read(ticket) for ticket in tickets]
@@ -138,6 +145,14 @@ async def ticket_stats(
 ) -> TicketStats:
     author_id = current_user.id if current_user.role == UserRole.employee else None
     return await get_ticket_stats(db, author_id=author_id)
+
+
+@router.get("/assignees", response_model=list[TicketAssigneeOption])
+async def list_ticket_assignees(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_it),
+) -> list[TicketAssigneeOption]:
+    return [TicketAssigneeOption.model_validate(item) for item in await get_ticket_assignees(db)]
 
 
 @router.get("/{ticket_id}", response_model=TicketRead)
@@ -163,6 +178,10 @@ async def create_new_ticket(
     current_user: User = Depends(get_current_user),
 ) -> TicketRead:
     ticket = await create_ticket(db, body, current_user)
+    try:
+        celery_app.send_task("app.tasks.ticket_tasks.notify_new_ticket", args=[str(ticket.id)])
+    except Exception:
+        logger.exception("Failed to enqueue new ticket notification task")
     ticket = await get_ticket_by_id(db, ticket.id)
     if ticket is None:
         raise HTTPException(
@@ -183,10 +202,39 @@ async def update_existing_ticket(
     if ticket is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
 
+    old_status = ticket.status
+    old_assignee = ticket.assignee_id
+    old_priority = ticket.priority
+
     try:
         ticket = await update_ticket(db, ticket, body, current_user)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
+
+    try:
+        if "status" in body.model_fields_set and ticket.status != old_status:
+            celery_app.send_task(
+                "app.tasks.ticket_tasks.notify_ticket_update",
+                args=[str(ticket.id), "status", old_status.value, ticket.status.value, current_user.username],
+            )
+        if "assignee_id" in body.model_fields_set and ticket.assignee_id != old_assignee:
+            celery_app.send_task(
+                "app.tasks.ticket_tasks.notify_ticket_update",
+                args=[
+                    str(ticket.id),
+                    "assignee_id",
+                    str(old_assignee) if old_assignee else None,
+                    str(ticket.assignee_id) if ticket.assignee_id else None,
+                    current_user.username,
+                ],
+            )
+        if "priority" in body.model_fields_set and ticket.priority != old_priority:
+            celery_app.send_task(
+                "app.tasks.ticket_tasks.notify_ticket_update",
+                args=[str(ticket.id), "priority", old_priority.value, ticket.priority.value, current_user.username],
+            )
+    except Exception:
+        logger.exception("Failed to enqueue ticket update notification task")
 
     ticket = await get_ticket_by_id(db, ticket.id)
     if ticket is None:
@@ -270,7 +318,15 @@ async def list_comments(
     if ticket is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
 
-    if current_user.role == UserRole.employee and ticket.author_id != current_user.id:
+    can_read_comments = False
+    if current_user.role == UserRole.admin:
+        can_read_comments = True
+    elif current_user.role == UserRole.it_specialist:
+        can_read_comments = True
+    elif current_user.role == UserRole.employee:
+        can_read_comments = ticket.author_id == current_user.id
+
+    if not can_read_comments:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     comments = await get_comments(db, ticket_id)
@@ -298,10 +354,25 @@ async def create_comment(
     if ticket is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
 
-    if current_user.role == UserRole.employee and ticket.author_id != current_user.id:
+    can_write_comment = False
+    if current_user.role == UserRole.admin:
+        can_write_comment = True
+    elif current_user.role == UserRole.it_specialist:
+        can_write_comment = ticket.author_id == current_user.id or ticket.assignee_id == current_user.id
+    elif current_user.role == UserRole.employee:
+        can_write_comment = ticket.author_id == current_user.id
+
+    if not can_write_comment:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     comment = await add_comment(db, ticket_id, current_user.id, body.text)
+    try:
+        celery_app.send_task(
+            "app.tasks.ticket_tasks.notify_ticket_update",
+            args=[str(ticket_id), "comment", None, body.text.strip(), current_user.username],
+        )
+    except Exception:
+        logger.exception("Failed to enqueue ticket comment notification task")
     return CommentRead(
         id=comment.id,
         ticket_id=comment.ticket_id,

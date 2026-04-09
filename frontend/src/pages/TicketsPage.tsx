@@ -26,6 +26,7 @@ import { useAuthStore } from "@/features/auth/store"
 
 const STATUS_FILTER_OPTIONS = [
   { value: "", label: "Все статусы" },
+  { value: "new_unassigned", label: "Новые без исполнителя" },
   { value: "new", label: "Новые" },
   { value: "in_progress", label: "В работе" },
   { value: "waiting", label: "Ожидание" },
@@ -73,13 +74,19 @@ export default function TicketsPage() {
         status?: string
         search?: string
         archived?: boolean
+        unassigned_only?: boolean
       } = {
         page,
         size: 20,
         archived,
       }
 
-      if (status) params.status = status
+      if (status === "new_unassigned") {
+        params.status = "new"
+        params.unassigned_only = true
+      } else if (status) {
+        params.status = status
+      }
       if (search.trim()) params.search = search.trim()
 
       const res = await getTickets(params)

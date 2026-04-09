@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 
-import type { Ticket, TicketComment, TicketHistory, TicketStatus } from "@/shared/types"
+import type { Ticket, TicketAssigneeOption, TicketComment, TicketHistory, TicketStatus } from "@/shared/types"
 import {
   PRIORITY_COLORS,
   PRIORITY_LABELS,
@@ -18,6 +18,7 @@ import {
   updateTicket,
   getTicketComments,
   addTicketComment,
+  getTicketAssignees,
   getTicketHistory,
   restoreTicket,
 } from "@/shared/api/tickets"
@@ -58,9 +59,12 @@ export default function TicketDetailPage() {
   const [error, setError] = useState<string | null>(null)
 
   const [statusUpdating, setStatusUpdating] = useState(false)
+  const [assigning, setAssigning] = useState(false)
   const [commentSending, setCommentSending] = useState(false)
   const [archiveLoading, setArchiveLoading] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [assignees, setAssignees] = useState<TicketAssigneeOption[]>([])
+  const [selectedAssigneeId, setSelectedAssigneeId] = useState("")
 
   const availableNextStatuses = useMemo(() => {
     if (!ticket) return []
@@ -83,20 +87,57 @@ export default function TicketDetailPage() {
       setLoading(true)
       setError(null)
 
-      const [ticketData, commentsData, historyData] = await Promise.all([
-        getTicket(id),
-        getTicketComments(id),
-        getTicketHistory(id),
-      ])
-
+      const ticketData = await getTicket(id)
       setTicket(ticketData)
-      setComments(commentsData)
-      setHistory(historyData)
+      setSelectedAssigneeId(ticketData.assignee_id ?? "")
+
+      try {
+        const commentsData = await getTicketComments(id)
+        setComments(commentsData)
+      } catch (commentsErr) {
+        console.warn("COMMENTS LOAD WARNING:", commentsErr)
+        setComments([])
+      }
+
+      try {
+        const historyData = await getTicketHistory(id)
+        setHistory(historyData)
+      } catch (historyErr) {
+        console.warn("HISTORY LOAD WARNING:", historyErr)
+        setHistory([])
+      }
+
+      if (isIT) {
+        try {
+          const options = await getTicketAssignees()
+          setAssignees(options)
+        } catch (assigneesErr) {
+          console.warn("ASSIGNEES LOAD WARNING:", assigneesErr)
+          setAssignees([])
+        }
+      }
     } catch (err) {
       console.error("TICKET DETAIL ERROR:", err)
       setError("Не удалось загрузить заявку")
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleAssigneeChange() {
+    if (!ticket || !isIT) return
+    try {
+      setAssigning(true)
+      const updated = await updateTicket(ticket.id, { assignee_id: selectedAssigneeId || null })
+      setTicket(updated)
+      const freshHistory = await getTicketHistory(ticket.id)
+      setHistory(freshHistory)
+    } catch (err: any) {
+      console.error("ASSIGN ERROR:", err)
+      const backendMessage = err?.response?.data?.detail || err?.message || "Ошибка назначения исполнителя"
+      alert(String(backendMessage))
+    } finally {
+      setAssigning(false)
     }
   }
 
@@ -299,7 +340,7 @@ export default function TicketDetailPage() {
             ) : (
               <div className="flex flex-wrap gap-2">
                 {availableNextStatuses.map((status) => {
-                  const option = STATUS_OPTIONS.find((s) => s.value === status)
+                  const option = STATUS_OPTIONS.find((s) => s.value == status)
                   if (!option) return null
 
                   return (
@@ -316,6 +357,37 @@ export default function TicketDetailPage() {
                 })}
               </div>
             )}
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-medium">Назначение исполнителя</p>
+            <div className="flex flex-wrap gap-2">
+              <select
+                value={selectedAssigneeId}
+                onChange={(e) => setSelectedAssigneeId(e.target.value)}
+                className="min-w-80 rounded-lg border px-3 py-2 text-sm"
+              >
+                <option value="">Не назначен</option>
+                {assignees.map((option) => (
+                  <option key={option.user_id} value={option.user_id} disabled={!option.is_available}>
+                    {option.full_name || option.username}
+                    {option.is_it_manager ? " (IT-менеджер)" : ""}
+                    {option.is_on_vacation ? " — недоступен (отпуск)" : ""}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={assigning}
+                onClick={() => void handleAssigneeChange()}
+                className="rounded-lg border px-3 py-2 text-sm font-medium transition hover:bg-accent disabled:opacity-60"
+              >
+                {assigning ? "Сохранение..." : "Назначить"}
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Для назначения доступны только IT-специалисты и IT-менеджер, сотрудники в отпуске недоступны.
+            </p>
           </div>
         </div>
       )}

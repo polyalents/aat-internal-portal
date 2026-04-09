@@ -6,6 +6,7 @@ import type {
   TicketHistory,
   TicketCategory,
   TicketStats,
+  TicketAssigneeOption,
   PaginatedResponse,
 } from "@/shared/types"
 
@@ -16,6 +17,7 @@ export async function getTickets(params?: {
   priority?: string
   search?: string
   archived?: boolean
+  unassigned_only?: boolean
 }): Promise<PaginatedResponse<Ticket>> {
   const { data } = await client.get("/tickets", { params })
   return data
@@ -35,7 +37,7 @@ export async function updateTicket(
   id: string,
   payload: {
     status?: string
-    assignee_id?: string
+    assignee_id?: string | null
     priority?: string
   }
 ): Promise<Ticket> {
@@ -84,6 +86,11 @@ export async function getTicketStats(): Promise<TicketStats> {
 
 export async function getTicketCategories(): Promise<TicketCategory[]> {
   const { data } = await client.get("/tickets/categories")
+  return data
+}
+
+export async function getTicketAssignees(): Promise<TicketAssigneeOption[]> {
+  const { data } = await client.get("/tickets/assignees")
   return data
 }
 

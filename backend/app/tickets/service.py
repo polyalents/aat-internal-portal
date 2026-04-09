@@ -10,7 +10,7 @@ from app.config import settings
 from app.tickets.enums import ALLOWED_TRANSITIONS, TicketPriority, TicketStatus
 from app.tickets.models import Ticket, TicketAttachment, TicketCategory, TicketComment, TicketHistory
 from app.tickets.schemas import TicketCreate, TicketStats, TicketUpdate
-from app.users.models import User
+from app.users.models import User, UserRole
 
 
 async def get_categories(db: AsyncSession, active_only: bool = True) -> list[TicketCategory]:
@@ -59,6 +59,7 @@ async def get_tickets(
     priority: TicketPriority | None = None,
     author_id: UUID | None = None,
     assignee_id: UUID | None = None,
+    unassigned_only: bool = False,
     search: str | None = None,
     archived: bool = False,
 ) -> tuple[list[Ticket], int]:
@@ -79,6 +80,8 @@ async def get_tickets(
         filters.append(Ticket.author_id == author_id)
     if assignee_id is not None:
         filters.append(Ticket.assignee_id == assignee_id)
+    if unassigned_only:
+        filters.append(Ticket.assignee_id.is_(None))
     if search:
         pattern = f"%{search.strip()}%"
         filters.append(or_(Ticket.subject.ilike(pattern), Ticket.description.ilike(pattern)))
@@ -131,6 +134,40 @@ async def create_ticket(db: AsyncSession, data: TicketCreate, author: User) -> T
     return ticket
 
 
+async def get_ticket_assignees(db: AsyncSession) -> list[dict]:
+    result = await db.execute(
+        select(User)
+        .options(selectinload(User.employee))
+        .where(
+            User.is_active.is_(True),
+            or_(
+                User.role == UserRole.it_specialist,
+                User.is_it_manager.is_(True),
+            ),
+        )
+        .order_by(User.is_it_manager.desc(), User.username)
+    )
+    users = list(result.scalars().all())
+
+    options: list[dict] = []
+    for user in users:
+        employee = user.employee
+        is_on_vacation = bool(employee and employee.is_on_vacation)
+        full_name = employee.full_name if employee else None
+        options.append(
+            {
+                "user_id": user.id,
+                "username": user.username,
+                "full_name": full_name,
+                "is_it_manager": user.is_it_manager,
+                "is_on_vacation": is_on_vacation,
+                "is_available": not is_on_vacation,
+            }
+        )
+
+    return options
+
+
 async def update_ticket(
     db: AsyncSession,
     ticket: Ticket,
@@ -165,14 +202,33 @@ async def update_ticket(
         else:
             ticket.completed_at = None
 
-    if data.assignee_id is not None and data.assignee_id != ticket.assignee_id:
+    assignee_field_set = "assignee_id" in data.model_fields_set
+    if assignee_field_set and data.assignee_id != ticket.assignee_id:
+        if data.assignee_id is not None:
+            assignee = await db.scalar(
+                select(User)
+                .options(selectinload(User.employee))
+                .where(
+                    User.id == data.assignee_id,
+                    User.is_active.is_(True),
+                )
+            )
+            if assignee is None:
+                raise ValueError("Исполнитель не найден или неактивен")
+
+            if assignee.role != UserRole.it_specialist and not assignee.is_it_manager:
+                raise ValueError("Исполнителем может быть только IT-специалист")
+
+            if assignee.employee is not None and assignee.employee.is_on_vacation:
+                raise ValueError("Нельзя назначить сотрудника, который находится в отпуске")
+
         changes.append(
             TicketHistory(
                 ticket_id=ticket.id,
                 changed_by=changed_by.id,
                 field="assignee_id",
                 old_value=str(ticket.assignee_id) if ticket.assignee_id else None,
-                new_value=str(data.assignee_id),
+                new_value=str(data.assignee_id) if data.assignee_id else None,
             )
         )
         ticket.assignee_id = data.assignee_id

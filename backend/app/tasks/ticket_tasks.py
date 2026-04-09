@@ -21,11 +21,11 @@ from app.notifications.email import (
     send_email,
 )
 from app.notifications.telegram import build_new_ticket_text, send_telegram_message
+from app.tasks import model_registry  # noqa: F401
 from app.tasks.celery_app import celery_app
 from app.tickets.enums import TicketStatus
 from app.tickets.models import Ticket, TicketHistory
 from app.users.models import User, UserRole
-from app.departments.models import Department
 
 logger = logging.getLogger(__name__)
 
@@ -61,35 +61,7 @@ def check_escalation() -> dict:
             logger.warning("No active IT Manager found. Escalation skipped.")
             return {"escalated": 0, "reason": "no_it_manager"}
 
-        manager_employee = db.execute(
-            select(Employee).where(Employee.user_id == it_manager.id)
-        ).scalar_one_or_none()
-
-        manager_on_vacation = bool(manager_employee and manager_employee.is_on_vacation)
         assignee = it_manager
-
-        if manager_on_vacation:
-            logger.warning("IT Manager is on vacation. Looking for available IT specialist.")
-            available_it_users = db.execute(
-                select(User)
-                .join(Employee, Employee.user_id == User.id, isouter=True)
-                .where(
-                    User.role == UserRole.it_specialist,
-                    User.is_active == True,  # noqa: E712
-                )
-            ).scalars().all()
-
-            assignee = None
-            for user in available_it_users:
-                employee = db.execute(
-                    select(Employee).where(Employee.user_id == user.id)
-                ).scalar_one_or_none()
-                if employee is None or not employee.is_on_vacation:
-                    assignee = user
-                    break
-
-            if assignee is None:
-                logger.warning("All IT specialists are on vacation. Escalating without assignment.")
 
         stale_tickets = db.execute(
             select(Ticket)
@@ -108,35 +80,33 @@ def check_escalation() -> dict:
             ticket.status = TicketStatus.escalated
             ticket.escalated_at = now
 
-            if assignee is not None:
-                ticket.assignee_id = assignee.id
+            ticket.assignee_id = assignee.id
 
             db.add(
                 TicketHistory(
                     ticket_id=ticket.id,
-                    changed_by=assignee.id if assignee else it_manager.id,
+                    changed_by=assignee.id,
                     field="status",
                     old_value=old_status,
                     new_value=TicketStatus.escalated.value,
                 )
             )
 
-            if assignee is not None:
-                db.add(
-                    TicketHistory(
-                        ticket_id=ticket.id,
-                        changed_by=assignee.id,
-                        field="assignee_id",
-                        old_value=None,
-                        new_value=str(assignee.id),
-                    )
+            db.add(
+                TicketHistory(
+                    ticket_id=ticket.id,
+                    changed_by=assignee.id,
+                    field="assignee_id",
+                    old_value=None,
+                    new_value=str(assignee.id),
                 )
+            )
 
             escalated_count += 1
             logger.info(
                 "Escalated ticket #%s to %s",
                 ticket.number,
-                assignee.username if assignee else "unassigned",
+                assignee.username,
             )
 
         db.commit()
@@ -165,13 +135,22 @@ def notify_new_ticket(ticket_id: str) -> dict:
 
         it_users = db.execute(
             select(User).where(
-                User.role.in_([UserRole.it_specialist, UserRole.admin]),
+                User.role == UserRole.it_specialist,
                 User.is_active == True,  # noqa: E712
             )
         ).scalars().all()
 
+        manager_users = db.execute(
+            select(User).where(
+                User.is_it_manager == True,  # noqa: E712
+                User.is_active == True,  # noqa: E712
+            )
+        ).scalars().all()
+
+        recipients_pool = {user.id: user for user in [*it_users, *manager_users]}.values()
+
         recipients: list[str] = []
-        for user in it_users:
+        for user in recipients_pool:
             employee = db.execute(
                 select(Employee).where(Employee.user_id == user.id)
             ).scalar_one_or_none()

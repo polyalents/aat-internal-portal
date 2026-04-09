@@ -6,6 +6,7 @@ import type {
   TicketHistory,
   TicketCategory,
   TicketStats,
+  TicketAssigneeOption,
   PaginatedResponse,
 } from "@/shared/types"
 
@@ -15,6 +16,7 @@ export async function getTickets(params?: {
   status?: string
   priority?: string
   search?: string
+  archived?: boolean
 }): Promise<PaginatedResponse<Ticket>> {
   const { data } = await client.get("/tickets", { params })
   return data
@@ -34,11 +36,30 @@ export async function updateTicket(
   id: string,
   payload: {
     status?: string
-    assignee_id?: string
+    assignee_id?: string | null
     priority?: string
   }
 ): Promise<Ticket> {
   const { data } = await client.patch(`/tickets/${id}`, payload)
+  return data
+}
+
+export async function archiveTicket(id: string): Promise<Ticket> {
+  const { data } = await client.post(`/tickets/${id}/archive`)
+  return data
+}
+
+export async function restoreTicket(id: string): Promise<Ticket> {
+  const { data } = await client.post(`/tickets/${id}/restore`)
+  return data
+}
+
+export async function deleteTicketPermanently(id: string): Promise<void> {
+  await client.delete(`/tickets/${id}`)
+}
+
+export async function cleanupOldTickets(): Promise<{ deleted: number }> {
+  const { data } = await client.post("/tickets/cleanup-old")
   return data
 }
 
@@ -64,6 +85,11 @@ export async function getTicketStats(): Promise<TicketStats> {
 
 export async function getTicketCategories(): Promise<TicketCategory[]> {
   const { data } = await client.get("/tickets/categories")
+  return data
+}
+
+export async function getTicketAssignees(): Promise<TicketAssigneeOption[]> {
+  const { data } = await client.get("/tickets/assignees")
   return data
 }
 

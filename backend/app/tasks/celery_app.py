@@ -2,6 +2,7 @@ from celery import Celery
 from celery.schedules import crontab
 
 from app.config import settings
+from app.tasks import model_registry  # noqa: F401
 
 
 celery_app = Celery(

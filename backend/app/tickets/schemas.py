@@ -117,3 +117,12 @@ class TicketStats(BaseModel):
     escalated: int = 0
     completed: int = 0
     rejected: int = 0
+
+
+class TicketAssigneeOption(BaseModel):
+    user_id: UUID
+    username: str
+    full_name: str | None = None
+    is_it_manager: bool
+    is_on_vacation: bool
+    is_available: bool

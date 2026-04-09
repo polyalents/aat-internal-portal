@@ -178,6 +178,15 @@ export interface TicketStats {
   rejected: number
 }
 
+export interface TicketAssigneeOption {
+  user_id: string
+  username: string
+  full_name: string | null
+  is_it_manager: boolean
+  is_on_vacation: boolean
+  is_available: boolean
+}
+
 // === Announcements ===
 export interface Announcement {
   id: string
