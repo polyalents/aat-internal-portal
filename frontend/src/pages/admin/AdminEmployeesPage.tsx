@@ -215,7 +215,7 @@ export default function AdminEmployeesPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 overflow-x-hidden">
       <header className="space-y-1">
         <h2 className="text-xl font-semibold">Карточки сотрудников</h2>
         <p className="text-sm text-muted-foreground">
@@ -226,22 +226,22 @@ export default function AdminEmployeesPage() {
       {error && <div className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
       {info && <div className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-700">{info}</div>}
 
-      <section className="rounded-xl border bg-card p-5 shadow-sm space-y-4">
+      <section className="space-y-5 rounded-xl border bg-card p-4 shadow-sm sm:p-5">
         <h3 className="text-base font-semibold">Новая карточка сотрудника</h3>
 
-        <div className="grid gap-2 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <Input placeholder="Имя*" value={createForm.first_name} onChange={(e) => handleCreateFormChange("first_name", e.target.value)} />
           <Input placeholder="Фамилия*" value={createForm.last_name} onChange={(e) => handleCreateFormChange("last_name", e.target.value)} />
           <Input placeholder="Отчество" value={createForm.middle_name} onChange={(e) => handleCreateFormChange("middle_name", e.target.value)} />
         </div>
 
-        <div className="grid gap-2 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <Input placeholder="Должность*" value={createForm.position} onChange={(e) => handleCreateFormChange("position", e.target.value)} />
           <Input placeholder="Email*" value={createForm.email} onChange={(e) => handleCreateFormChange("email", e.target.value)} />
           <Input placeholder="Кабинет" value={createForm.room_number} onChange={(e) => handleCreateFormChange("room_number", e.target.value)} />
         </div>
 
-        <div className="grid gap-2 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <Input placeholder="Внутренний телефон" value={createForm.internal_phone} onChange={(e) => handleCreateFormChange("internal_phone", e.target.value)} />
           <Input placeholder="Мобильный телефон" value={createForm.mobile_phone} onChange={(e) => handleCreateFormChange("mobile_phone", e.target.value)} />
           <label className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
@@ -250,7 +250,7 @@ export default function AdminEmployeesPage() {
           </label>
         </div>
 
-        <div className="grid gap-2 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <label className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
             Начало отпуска
             <Input className="mt-1" type="date" value={createForm.vacation_start} onChange={(e) => handleCreateFormChange("vacation_start", e.target.value)} />
@@ -261,22 +261,22 @@ export default function AdminEmployeesPage() {
           </label>
         </div>
 
-        <div className="grid gap-2 md:grid-cols-3">
-          <select className="h-10 rounded-md border bg-background px-2 text-sm" value={createForm.department_id} onChange={(e) => handleCreateFormChange("department_id", e.target.value)}>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <select className="h-11 rounded-md border bg-background px-2.5 text-sm" value={createForm.department_id} onChange={(e) => handleCreateFormChange("department_id", e.target.value)}>
             <option value="">Отдел не выбран</option>
             {departments.map((department) => (
               <option key={department.id} value={department.id}>{department.name}</option>
             ))}
           </select>
 
-          <select className="h-10 rounded-md border bg-background px-2 text-sm" value={createForm.manager_id} onChange={(e) => handleCreateFormChange("manager_id", e.target.value)}>
+          <select className="h-11 rounded-md border bg-background px-2.5 text-sm" value={createForm.manager_id} onChange={(e) => handleCreateFormChange("manager_id", e.target.value)}>
             <option value="">Руководитель не выбран</option>
             {managerOptions.map((manager) => (
               <option key={manager.id} value={manager.id}>{manager.full_name}</option>
             ))}
           </select>
 
-          <select className="h-10 rounded-md border bg-background px-2 text-sm" value={createForm.user_id} onChange={(e) => handleCreateFormChange("user_id", e.target.value)}>
+          <select className="h-11 rounded-md border bg-background px-2.5 text-sm" value={createForm.user_id} onChange={(e) => handleCreateFormChange("user_id", e.target.value)}>
             <option value="">Учётная запись не привязана</option>
             {availableUsersForEmployee(null).map((user) => (
               <option key={user.id} value={user.id}>{user.username}</option>
@@ -284,13 +284,13 @@ export default function AdminEmployeesPage() {
           </select>
         </div>
 
-        <Button onClick={() => void handleCreateEmployee()}>Создать карточку</Button>
+        <Button className="w-full sm:w-auto" onClick={() => void handleCreateEmployee()}>Создать карточку</Button>
       </section>
 
       <section className="space-y-4">
         <div className="flex flex-wrap gap-2">
-          <Input className="min-w-72 flex-1" placeholder="Поиск по ФИО, должности или email" value={search} onChange={(e) => setSearch(e.target.value)} />
-          <Button variant="outline" onClick={() => void loadData(search)}>Найти</Button>
+          <Input className="w-full sm:min-w-72 sm:flex-1" placeholder="Поиск по ФИО, должности или email" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Button className="w-full sm:w-auto" variant="outline" onClick={() => void loadData(search)}>Найти</Button>
         </div>
 
         <div className="space-y-4">
@@ -298,40 +298,40 @@ export default function AdminEmployeesPage() {
             const isEditing = editingId === employee.id
             const currentForm = isEditing ? editForm : toForm(employee)
             return (
-              <article key={employee.id} className="rounded-xl border bg-card p-5 shadow-sm space-y-4">
+              <article key={employee.id} className="space-y-5 rounded-xl border bg-card p-4 shadow-sm sm:p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h4 className="font-semibold">{employee.full_name}</h4>
                     <p className="text-sm text-muted-foreground">{employee.position} · {employee.email}</p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex w-full flex-wrap gap-2 sm:w-auto">
                     {!isEditing ? (
                       <>
-                        <Button size="sm" onClick={() => startEdit(employee)}>Редактировать</Button>
-                        <Button size="sm" variant="destructive" onClick={() => void deleteEmployee(employee)}>Удалить</Button>
+                        <Button className="w-full sm:w-auto" size="sm" onClick={() => startEdit(employee)}>Редактировать</Button>
+                        <Button className="w-full sm:w-auto" size="sm" variant="destructive" onClick={() => void deleteEmployee(employee)}>Удалить</Button>
                       </>
                     ) : (
                       <>
-                        <Button size="sm" onClick={() => void saveEdit(employee.id)}>Сохранить</Button>
-                        <Button size="sm" variant="outline" onClick={cancelEdit}>Отмена</Button>
+                        <Button className="w-full sm:w-auto" size="sm" onClick={() => void saveEdit(employee.id)}>Сохранить</Button>
+                        <Button className="w-full sm:w-auto" size="sm" variant="outline" onClick={cancelEdit}>Отмена</Button>
                       </>
                     )}
                   </div>
                 </div>
 
-                <div className="grid gap-2 md:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   <Input disabled={!isEditing} placeholder="Имя" value={currentForm.first_name} onChange={(e) => handleEditFormChange("first_name", e.target.value)} />
                   <Input disabled={!isEditing} placeholder="Фамилия" value={currentForm.last_name} onChange={(e) => handleEditFormChange("last_name", e.target.value)} />
                   <Input disabled={!isEditing} placeholder="Отчество" value={currentForm.middle_name} onChange={(e) => handleEditFormChange("middle_name", e.target.value)} />
                 </div>
 
-                <div className="grid gap-2 md:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   <Input disabled={!isEditing} placeholder="Должность" value={currentForm.position} onChange={(e) => handleEditFormChange("position", e.target.value)} />
                   <Input disabled={!isEditing} placeholder="Email" value={currentForm.email} onChange={(e) => handleEditFormChange("email", e.target.value)} />
                   <Input disabled={!isEditing} placeholder="Кабинет" value={currentForm.room_number} onChange={(e) => handleEditFormChange("room_number", e.target.value)} />
                 </div>
 
-                <div className="grid gap-2 md:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   <Input disabled={!isEditing} placeholder="Внутренний телефон" value={currentForm.internal_phone} onChange={(e) => handleEditFormChange("internal_phone", e.target.value)} />
                   <Input disabled={!isEditing} placeholder="Мобильный телефон" value={currentForm.mobile_phone} onChange={(e) => handleEditFormChange("mobile_phone", e.target.value)} />
                   <label className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
@@ -340,7 +340,7 @@ export default function AdminEmployeesPage() {
                   </label>
                 </div>
 
-                <div className="grid gap-2 md:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   <label className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
                     Начало отпуска
                     <Input disabled={!isEditing} className="mt-1" type="date" value={currentForm.vacation_start} onChange={(e) => handleEditFormChange("vacation_start", e.target.value)} />
@@ -351,22 +351,22 @@ export default function AdminEmployeesPage() {
                   </label>
                 </div>
 
-                <div className="grid gap-2 md:grid-cols-3">
-                  <select disabled={!isEditing} className="h-10 rounded-md border bg-background px-2 text-sm" value={currentForm.department_id} onChange={(e) => handleEditFormChange("department_id", e.target.value)}>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  <select disabled={!isEditing} className="h-11 rounded-md border bg-background px-2.5 text-sm" value={currentForm.department_id} onChange={(e) => handleEditFormChange("department_id", e.target.value)}>
                     <option value="">Отдел не выбран</option>
                     {departments.map((department) => (
                       <option key={department.id} value={department.id}>{department.name}</option>
                     ))}
                   </select>
 
-                  <select disabled={!isEditing} className="h-10 rounded-md border bg-background px-2 text-sm" value={currentForm.manager_id} onChange={(e) => handleEditFormChange("manager_id", e.target.value)}>
+                  <select disabled={!isEditing} className="h-11 rounded-md border bg-background px-2.5 text-sm" value={currentForm.manager_id} onChange={(e) => handleEditFormChange("manager_id", e.target.value)}>
                     <option value="">Руководитель не выбран</option>
                     {managerOptions.filter((m) => m.id !== employee.id).map((manager) => (
                       <option key={manager.id} value={manager.id}>{manager.full_name}</option>
                     ))}
                   </select>
 
-                  <select disabled={!isEditing} className="h-10 rounded-md border bg-background px-2 text-sm" value={currentForm.user_id} onChange={(e) => handleEditFormChange("user_id", e.target.value)}>
+                  <select disabled={!isEditing} className="h-11 rounded-md border bg-background px-2.5 text-sm" value={currentForm.user_id} onChange={(e) => handleEditFormChange("user_id", e.target.value)}>
                     <option value="">Учётная запись не привязана</option>
                     {availableUsersForEmployee(employee).map((user) => (
                       <option key={user.id} value={user.id}>{user.username}</option>

@@ -174,7 +174,7 @@ export default function KnowledgePage() {
       }
     } catch (e) {
       console.error("DELETE CATEGORY ERROR:", e)
-      alert("Не удалось удалить категорию")
+      alert("Не удалось удалить категорию. Возможно, в ней есть статьи.")
     }
   }
 
@@ -333,7 +333,7 @@ export default function KnowledgePage() {
         onChange={(e) => setSearch(e.target.value)}
       />
 
-      <div className="grid md:grid-cols-[220px_1fr] gap-4">
+      <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
         <aside className="space-y-2">
           <button
             onClick={() => setSelectedCategory(undefined)}
@@ -346,13 +346,13 @@ export default function KnowledgePage() {
             <div
               key={c.id}
               className={cn(
-                "flex items-center justify-between rounded-md px-3 py-2",
+                "flex items-center justify-between gap-2 rounded-md px-3 py-2",
                 selectedCategory === c.id && "bg-accent"
               )}
             >
               <button
                 onClick={() => setSelectedCategory(c.id)}
-                className="flex-1 text-left text-sm"
+                className="min-w-0 flex-1 truncate text-left text-sm"
               >
                 {c.name}
               </button>
@@ -360,7 +360,7 @@ export default function KnowledgePage() {
               {canManage && (
                 <button
                   onClick={() => handleDeleteCategory(c.id)}
-                  className="ml-2 text-xs text-red-500"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-red-200 text-red-500 hover:bg-red-50"
                   title="Удалить категорию"
                 >
                   <Trash2 size={14} />
@@ -370,29 +370,31 @@ export default function KnowledgePage() {
           ))}
         </aside>
 
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2">
           {loading ? (
             <p>Загрузка...</p>
           ) : articles.length === 0 ? (
             <p>Нет статей</p>
           ) : (
             articles.map((a) => (
-              <div key={a.id} className="relative border rounded p-3 group">
-                <Link to={`/knowledge/${a.id}`}>
-                  <h3 className="font-medium">{a.title}</h3>
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    {a.content}
-                  </p>
-                </Link>
+              <div key={a.id} className="rounded border p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <Link to={`/knowledge/${a.id}`} className="min-w-0 flex-1">
+                    <h3 className="font-medium">{a.title}</h3>
+                    <p className="text-sm text-muted-foreground line-clamp-2">
+                      {a.content}
+                    </p>
+                  </Link>
 
-                {canManage && (
-                  <button
-                    onClick={() => handleDeleteArticle(a.id)}
-                    className="absolute top-2 right-2 text-red-500 opacity-0 group-hover:opacity-100 text-xs"
-                  >
-                    удалить
-                  </button>
-                )}
+                  {canManage && (
+                    <button
+                      onClick={() => handleDeleteArticle(a.id)}
+                      className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-red-200 px-2 text-xs text-red-500 hover:bg-red-50"
+                    >
+                      удалить
+                    </button>
+                  )}
+                </div>
               </div>
             ))
           )}

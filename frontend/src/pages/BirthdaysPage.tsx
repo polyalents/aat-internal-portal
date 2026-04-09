@@ -87,9 +87,20 @@ export default function BirthdaysPage() {
   const [popover, setPopover] = useState<BirthdayPopoverState>(null)
   const [birthdays, setBirthdays] = useState<BirthdayEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [isMobile, setIsMobile] = useState(false)
 
   const month = displayedMonth.getMonth() + 1
   const year = displayedMonth.getFullYear()
+
+  useEffect(() => {
+    const updateViewport = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+
+    updateViewport()
+    window.addEventListener("resize", updateViewport)
+    return () => window.removeEventListener("resize", updateViewport)
+  }, [])
 
   useEffect(() => {
     if (mode !== "month") {
@@ -120,6 +131,12 @@ export default function BirthdaysPage() {
       .finally(() => setLoading(false))
   }, [mode, month])
 
+  useEffect(() => {
+    if (isMobile) {
+      setPopover(null)
+    }
+  }, [isMobile])
+
   const birthdaysByDay = useMemo(() => {
     const grouped = new Map<number, BirthdayEntry[]>()
 
@@ -142,6 +159,7 @@ export default function BirthdaysPage() {
 
   const monthCells = useMemo(() => buildMonthCells(year, month), [year, month])
   const popoverItems = popover ? birthdaysByDay.get(popover.day) ?? [] : []
+  const selectedDayItems = birthdaysByDay.get(selectedDay) ?? []
 
   function goToPrevMonth() {
     setDisplayedMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))
@@ -159,6 +177,11 @@ export default function BirthdaysPage() {
     event: React.MouseEvent<HTMLButtonElement>
   ) {
     setSelectedDay(day)
+
+    if (isMobile) {
+      setPopover(null)
+      return
+    }
 
     if (!hasBirthdays) {
       setPopover(null)
@@ -222,8 +245,8 @@ export default function BirthdaysPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3">
+    <div className="space-y-5 overflow-x-hidden">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Дни рождения</h1>
           <p className="mt-1 text-sm text-muted-foreground">Не забудьте поздравить коллег</p>
@@ -231,16 +254,16 @@ export default function BirthdaysPage() {
 
         <Link
           to="/employees?sort=birth_date"
-          className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-accent"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-accent sm:w-auto"
         >
           <ListOrdered className="h-4 w-4" />
           Все по дате рождения
         </Link>
       </div>
 
-      <div className="flex items-start gap-4">
-        <aside className="w-[130px] shrink-0 rounded-xl border border-border bg-card p-1.5">
-          <div className="space-y-1">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start">
+        <aside className="w-full rounded-xl border border-border bg-card p-1.5 md:w-[130px] md:shrink-0">
+          <div className="grid grid-cols-2 gap-1 sm:grid-cols-4 md:grid-cols-1">
             {PERIOD_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
@@ -265,131 +288,179 @@ export default function BirthdaysPage() {
               <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
             </div>
           ) : mode === "month" ? (
-            <div ref={calendarRef} className="relative rounded-xl border border-border bg-card p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={goToPrevMonth}
-                  className="rounded-md border border-border p-1.5 hover:bg-accent"
-                  aria-label="Предыдущий месяц"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
+            <div className="rounded-xl border border-border bg-card p-3 sm:p-4">
+              <div ref={calendarRef} className="relative">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={goToPrevMonth}
+                    className="rounded-md border border-border p-1.5 hover:bg-accent"
+                    aria-label="Предыдущий месяц"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
 
-                <h2 className="text-sm font-semibold md:text-base">
-                  {displayedMonth.toLocaleDateString("ru-RU", {
-                    month: "long",
-                    year: "numeric",
-                  })}
-                </h2>
+                  <h2 className="min-w-0 text-center text-sm font-semibold md:text-base">
+                    {displayedMonth.toLocaleDateString("ru-RU", {
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </h2>
 
-                <button
-                  type="button"
-                  onClick={goToNextMonth}
-                  className="rounded-md border border-border p-1.5 hover:bg-accent"
-                  aria-label="Следующий месяц"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={goToNextMonth}
+                    className="rounded-md border border-border p-1.5 hover:bg-accent"
+                    aria-label="Следующий месяц"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
 
-              <div className="mb-2 grid grid-cols-7 gap-1">
-                {WEEKDAY_LABELS.map((label) => (
-                  <div key={label} className="text-center text-[11px] text-muted-foreground">
-                    {label}
-                  </div>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-7 gap-1">
-                {monthCells.map((cell, idx) => {
-                  if (cell.day === null) {
-                    return <div key={`empty-${idx}`} className="h-10 rounded-md" />
-                  }
-
-                  const day = cell.day
-                  const dayBirthdays = birthdaysByDay.get(day) ?? []
-                  const hasBirthdays = dayBirthdays.length > 0
-                  const isSelected = selectedDay === day
-                  const isToday = isTodayDate(day, month, year)
-
-                  return (
-                    <button
-                      key={`day-${day}-${idx}`}
-                      type="button"
-                      onClick={(event) => handleDayClick(day, hasBirthdays, event)}
-                      className={cn(
-                        "relative h-10 rounded-md text-sm transition",
-                        hasBirthdays
-                          ? "bg-pink-50 text-pink-700 hover:bg-pink-100 dark:bg-pink-500/10 dark:text-pink-300"
-                          : "hover:bg-accent",
-                        isSelected && "ring-2 ring-primary",
-                        isToday && "font-bold"
-                      )}
+                <div className="mb-2 grid grid-cols-7 gap-1">
+                  {WEEKDAY_LABELS.map((label) => (
+                    <div
+                      key={label}
+                      className="text-center text-[10px] text-muted-foreground sm:text-[11px]"
                     >
-                      {day}
-                      {hasBirthdays && (
-                        <>
-                          <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-pink-500" />
-                          {dayBirthdays.length > 1 && (
-                            <span className="absolute right-1 top-1 rounded-full bg-pink-500 px-1 text-[10px] leading-4 text-white">
-                              {dayBirthdays.length}
-                            </span>
+                      {label}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-7 gap-1">
+                  {monthCells.map((cell, idx) => {
+                    if (cell.day === null) {
+                      return <div key={`empty-${idx}`} className="h-10 rounded-md" />
+                    }
+
+                    const day = cell.day
+                    const dayBirthdays = birthdaysByDay.get(day) ?? []
+                    const hasBirthdays = dayBirthdays.length > 0
+                    const isSelected = selectedDay === day
+                    const isToday = isTodayDate(day, month, year)
+
+                    return (
+                      <button
+                        key={`day-${day}-${idx}`}
+                        type="button"
+                        onClick={(event) => handleDayClick(day, hasBirthdays, event)}
+                        className={cn(
+                          "relative h-10 rounded-md text-sm transition sm:h-11",
+                          hasBirthdays
+                            ? "bg-pink-50 text-pink-700 hover:bg-pink-100 dark:bg-pink-500/10 dark:text-pink-300"
+                            : "hover:bg-accent",
+                          isSelected && "ring-2 ring-primary",
+                          isToday && "font-bold"
+                        )}
+                      >
+                        {day}
+                        {hasBirthdays && (
+                          <>
+                            <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-pink-500" />
+                            {dayBirthdays.length > 1 && (
+                              <span className="absolute right-1 top-1 rounded-full bg-pink-500 px-1 text-[10px] leading-4 text-white">
+                                {dayBirthdays.length}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {!isMobile && popover && popoverItems.length > 0 && (
+                  <div
+                    className="absolute z-20 w-[260px] rounded-xl border border-border bg-background p-3 shadow-lg"
+                    style={{ left: popover.x, top: popover.y }}
+                  >
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold">
+                        {popover.day}{" "}
+                        {displayedMonth.toLocaleDateString("ru-RU", { month: "long" })}
+                      </p>
+
+                      <button
+                        type="button"
+                        onClick={() => setPopover(null)}
+                        className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                        aria-label="Закрыть"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {popoverItems.map((entry) => (
+                        <Link
+                          key={entry.id}
+                          to={`/employees/${entry.id}`}
+                          className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-2 transition hover:bg-accent"
+                        >
+                          {entry.photo_url ? (
+                            <img
+                              src={entry.photo_url}
+                              alt={entry.full_name}
+                              className="h-8 w-8 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
+                              <User className="h-4 w-4 text-muted-foreground" />
+                            </div>
                           )}
-                        </>
-                      )}
-                    </button>
-                  )
-                })}
+
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{entry.full_name}</p>
+                            <p className="truncate text-xs text-muted-foreground">{entry.position}</p>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {popover && popoverItems.length > 0 && (
-                <div
-                  className="absolute z-20 w-[260px] rounded-xl border border-border bg-background p-3 shadow-lg"
-                  style={{ left: popover.x, top: popover.y }}
-                >
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold">
-                      {popover.day}{" "}
+              {isMobile && (
+                <div className="mt-4 rounded-xl border border-border bg-muted/20 p-3">
+                  <div className="mb-2 flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-sm font-medium">
+                      {selectedDay}{" "}
                       {displayedMonth.toLocaleDateString("ru-RU", { month: "long" })}
                     </p>
-
-                    <button
-                      type="button"
-                      onClick={() => setPopover(null)}
-                      className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-                      aria-label="Закрыть"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
                   </div>
 
-                  <div className="space-y-2">
-                    {popoverItems.map((entry) => (
-                      <Link
-                        key={entry.id}
-                        to={`/employees/${entry.id}`}
-                        className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-2 transition hover:bg-accent"
-                      >
-                        {entry.photo_url ? (
-                          <img
-                            src={entry.photo_url}
-                            alt={entry.full_name}
-                            className="h-8 w-8 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
-                            <User className="h-4 w-4 text-muted-foreground" />
+                  {selectedDayItems.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Нет дней рождения</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {selectedDayItems.map((entry) => (
+                        <Link
+                          key={entry.id}
+                          to={`/employees/${entry.id}`}
+                          className="flex items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-2 transition hover:bg-accent"
+                        >
+                          {entry.photo_url ? (
+                            <img
+                              src={entry.photo_url}
+                              alt={entry.full_name}
+                              className="h-8 w-8 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
+                              <User className="h-4 w-4 text-muted-foreground" />
+                            </div>
+                          )}
+
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{entry.full_name}</p>
+                            <p className="truncate text-xs text-muted-foreground">{entry.position}</p>
                           </div>
-                        )}
-
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">{entry.full_name}</p>
-                          <p className="truncate text-xs text-muted-foreground">{entry.position}</p>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

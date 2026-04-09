@@ -119,9 +119,31 @@ html,
 body,
 #root {
   min-height: 100%;
+  width: 100%;
 }
 
 body {
   background: var(--color-background);
   color: var(--color-foreground);
+  overflow-x: hidden;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  max-width: 100%;
 }

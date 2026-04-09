@@ -135,8 +135,8 @@ export default function TicketsPage() {
   const totalPages = Math.ceil(total / 20)
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
+    <div className="space-y-6 overflow-x-hidden">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Заявки</h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -144,11 +144,11 @@ export default function TicketsPage() {
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {isIT && (
             <button
               onClick={() => setArchived((v) => !v)}
-              className="flex items-center gap-2 rounded-lg border px-4 py-2 hover:bg-accent"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-2 hover:bg-accent sm:w-auto"
             >
               <Archive className="h-4 w-4" />
               {archived ? "Скрыть архив" : "Показать архив"}
@@ -159,7 +159,7 @@ export default function TicketsPage() {
             <button
               onClick={handleCleanup}
               disabled={cleanupLoading}
-              className="rounded-lg border border-red-300 px-4 py-2 text-red-600 hover:bg-red-50 disabled:opacity-60"
+              className="w-full rounded-lg border border-red-300 px-4 py-2 text-red-600 hover:bg-red-50 disabled:opacity-60 sm:w-auto"
             >
               {cleanupLoading ? "Очистка..." : "Очистить старые"}
             </button>
@@ -167,7 +167,7 @@ export default function TicketsPage() {
 
           <button
             onClick={() => navigate("/tickets/new")}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-white hover:bg-primary/90"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-white hover:bg-primary/90 sm:w-auto"
           >
             <Plus className="h-4 w-4" />
             Создать заявку
@@ -175,8 +175,8 @@ export default function TicketsPage() {
         </div>
       </div>
 
-      <div className="flex gap-3">
-        <div className="relative flex-1">
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="relative min-w-0 flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             value={search}
@@ -195,7 +195,7 @@ export default function TicketsPage() {
             setStatus(e.target.value)
             setPage(1)
           }}
-          className="rounded-lg border px-4 py-2"
+          className="w-full rounded-lg border px-4 py-2 sm:w-auto"
         >
           {STATUS_FILTER_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -226,9 +226,9 @@ export default function TicketsPage() {
               to={`/tickets/${t.id}`}
               className="block rounded-xl border p-4 hover:shadow"
             >
-              <div className="flex justify-between">
-                <div>
-                  <div className="mb-1 flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <div className="mb-1 flex flex-wrap gap-2">
                     <span className="text-xs text-muted-foreground">
                       #{t.number || t.id.slice(0, 6)}
                     </span>
@@ -249,10 +249,10 @@ export default function TicketsPage() {
                     )}
                   </div>
 
-                  <div className="font-medium">{t.subject}</div>
+                  <div className="break-words font-medium">{t.subject}</div>
                 </div>
 
-                <div className="text-xs text-muted-foreground">
+                <div className="text-xs text-muted-foreground sm:whitespace-nowrap">
                   {formatRelative(t.created_at)}
                 </div>
               </div>
@@ -262,7 +262,7 @@ export default function TicketsPage() {
       )}
 
       {totalPages > 1 && (
-        <div className="flex justify-center gap-3">
+        <div className="flex flex-wrap items-center justify-center gap-3">
           <button disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
             Назад
           </button>
