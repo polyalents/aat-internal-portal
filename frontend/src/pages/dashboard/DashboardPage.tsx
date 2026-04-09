@@ -1,6 +1,14 @@
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
-import { AlertTriangle, Ticket, Cake, Briefcase } from "lucide-react"
+import {
+  AlertTriangle,
+  Ticket,
+  Cake,
+  Megaphone,
+  BookOpen,
+  FolderKanban,
+  Briefcase,
+} from "lucide-react"
 
 import { useAuthStore } from "@/features/auth/store"
 import type { BirthdayEntry, Dashboard } from "@/shared/types"
@@ -11,6 +19,7 @@ import {
   STATUS_LABELS,
   cn,
   formatRelative,
+  formatDateTime,
 } from "@/lib/utils"
 import { getBirthdays } from "@/features/employees/api"
 
@@ -85,7 +94,7 @@ export default function DashboardPage() {
         <section className="space-y-3 rounded-lg border border-border p-4">
           <h2 className="flex items-center gap-2 font-semibold">
             <AlertTriangle className="h-4 w-4 text-orange-500" />
-            Нераспределённые заявки ({data.unassigned_tickets.length})
+            Последние заявки без исполнителя
           </h2>
 
           <div className="space-y-2">
@@ -115,14 +124,18 @@ export default function DashboardPage() {
               </Link>
             ))}
           </div>
+
+          <Link to="/tickets?scope=unassigned" className="text-sm text-primary hover:underline">
+            Все новые без исполнителя →
+          </Link>
         </section>
       )}
 
-      {isIT() && data.assigned_tickets.length > 0 && (
+      {isIT() && data.assigned_tickets && data.assigned_tickets.length > 0 && (
         <section className="space-y-3 rounded-lg border border-border p-4">
           <h2 className="flex items-center gap-2 font-semibold">
             <Briefcase className="h-4 w-4 text-blue-500" />
-            Мои принятые в работу ({data.assigned_tickets.length})
+            Мои заявки, принятые в работу
           </h2>
 
           <div className="space-y-2">
@@ -152,10 +165,14 @@ export default function DashboardPage() {
               </Link>
             ))}
           </div>
+
+          <Link to="/tickets?scope=assigned" className="text-sm text-primary hover:underline">
+            Все мои принятые заявки →
+          </Link>
         </section>
       )}
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 xl:grid-cols-2">
         <section className="space-y-3 rounded-lg border border-border p-4">
           <h2 className="flex items-center gap-2 font-semibold">
             <Ticket className="h-4 w-4" />
@@ -266,6 +283,67 @@ export default function DashboardPage() {
               Сотрудники по дате рождения →
             </Link>
           </div>
+        </section>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <section className="space-y-3 rounded-lg border border-border p-4">
+          <h2 className="flex items-center gap-2 font-semibold">
+            <Megaphone className="h-4 w-4 text-emerald-500" />
+            Последние объявления
+          </h2>
+
+          {data.recent_announcements.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Нет актуальных объявлений</p>
+          ) : (
+            <div className="space-y-3">
+              {data.recent_announcements.map((item) => (
+                <div key={item.id} className="rounded-md border border-border p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{item.title}</p>
+                      <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                        {item.content}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {formatDateTime(item.published_at)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <Link to="/announcements" className="text-sm text-primary hover:underline">
+            Все объявления →
+          </Link>
+        </section>
+
+        <section className="rounded-lg border border-border p-4">
+          <Link
+            to="/knowledge"
+            className="group block rounded-lg border border-border bg-card p-5 transition-colors hover:bg-accent"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h2 className="flex items-center gap-2 font-semibold">
+                  <BookOpen className="h-5 w-5 text-violet-500" />
+                  База знаний
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Инструкции, ответы на частые вопросы и полезные материалы для сотрудников.
+                </p>
+                <div className="mt-4 inline-flex items-center text-sm font-medium text-primary group-hover:underline">
+                  Открыть базу знаний →
+                </div>
+              </div>
+
+              <div className="hidden shrink-0 rounded-full bg-violet-500/10 p-3 text-violet-500 sm:block">
+                <FolderKanban className="h-5 w-5" />
+              </div>
+            </div>
+          </Link>
         </section>
       </div>
     </div>
