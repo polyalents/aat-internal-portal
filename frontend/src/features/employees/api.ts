@@ -11,6 +11,7 @@ export async function getEmployees(params?: {
   size?: number
   search?: string
   department_id?: string
+  sort_by?: "name" | "birth_date"
 }): Promise<PaginatedResponse<Employee>> {
   const { data } = await client.get("/employees/", { params })
 

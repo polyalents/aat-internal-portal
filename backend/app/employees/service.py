@@ -46,6 +46,7 @@ async def get_employees(
     search: str | None = None,
     department_id: UUID | None = None,
     is_active: bool | None = True,
+    sort_by: str = "name",
 ) -> tuple[list[Employee], int]:
     stmt = (
         select(Employee)
@@ -78,11 +79,18 @@ async def get_employees(
 
     total = (await db.execute(count_stmt)).scalar() or 0
 
-    stmt = (
-        stmt.order_by(Employee.last_name, Employee.first_name)
-        .offset((page - 1) * size)
-        .limit(size)
-    )
+    if sort_by == "birth_date":
+        stmt = stmt.order_by(
+            Employee.birth_date.is_(None),
+            extract("month", Employee.birth_date),
+            extract("day", Employee.birth_date),
+            Employee.last_name,
+            Employee.first_name,
+        )
+    else:
+        stmt = stmt.order_by(Employee.last_name, Employee.first_name)
+
+    stmt = stmt.offset((page - 1) * size).limit(size)
 
     result = await db.execute(stmt)
     employees = list(result.scalars().unique().all())
@@ -302,16 +310,49 @@ async def get_birthdays(
             stmt = stmt.where(or_(*conditions))
     elif period.isdigit():
         month = int(period)
-        if 1 <= month <= 12:
-            stmt = stmt.where(extract("month", Employee.birth_date) == month)
-
-    stmt = stmt.order_by(
-        extract("month", Employee.birth_date),
-        extract("day", Employee.birth_date),
-    )
+        if not 1 <= month <= 12:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Month must be between 1 and 12",
+            )
+        stmt = stmt.where(extract("month", Employee.birth_date) == month)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid period. Use today, tomorrow, week, or month number (1-12)",
+        )
 
     result = await db.execute(stmt)
     employees = list(result.scalars().unique().all())
+
+    if period == "week":
+        week_start = today - timedelta(days=today.weekday())
+        week_dates = [week_start + timedelta(days=offset) for offset in range(7)]
+        order_map = {(day.month, day.day): idx for idx, day in enumerate(week_dates)}
+        employees.sort(
+            key=lambda employee: (
+                order_map.get((employee.birth_date.month, employee.birth_date.day), 999),
+                employee.last_name,
+                employee.first_name,
+            )
+        )
+    elif period.isdigit():
+        employees.sort(
+            key=lambda employee: (
+                employee.birth_date.day,
+                employee.last_name,
+                employee.first_name,
+            )
+        )
+    else:
+        employees.sort(
+            key=lambda employee: (
+                employee.birth_date.month,
+                employee.birth_date.day,
+                employee.last_name,
+                employee.first_name,
+            )
+        )
 
     return [
         BirthdayEntry(

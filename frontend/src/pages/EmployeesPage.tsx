@@ -25,10 +25,12 @@ export default function EmployeesPage() {
 
   const initialPage = Number(searchParams.get("page") || "1")
   const initialSearch = searchParams.get("search") || ""
+  const initialSort = searchParams.get("sort") === "birth_date" ? "birth_date" : "name"
 
   const [page, setPage] = useState(Number.isNaN(initialPage) ? 1 : initialPage)
   const [search, setSearch] = useState(initialSearch)
   const [searchInput, setSearchInput] = useState(initialSearch)
+  const [sortBy, setSortBy] = useState<"name" | "birth_date">(initialSort)
 
   useEffect(() => {
     const params = new URLSearchParams()
@@ -40,9 +42,12 @@ export default function EmployeesPage() {
     if (search.trim()) {
       params.set("search", search.trim())
     }
+    if (sortBy === "birth_date") {
+      params.set("sort", "birth_date")
+    }
 
     setSearchParams(params, { replace: true })
-  }, [page, search, setSearchParams])
+  }, [page, search, sortBy, setSearchParams])
 
   useEffect(() => {
     setLoading(true)
@@ -52,6 +57,7 @@ export default function EmployeesPage() {
       page,
       size: PAGE_SIZE,
       search: search.trim() || undefined,
+      sort_by: sortBy,
     })
       .then((res: PaginatedResponse<Employee>) => {
         setEmployees(res.items)
@@ -64,7 +70,7 @@ export default function EmployeesPage() {
         setError("Не удалось загрузить сотрудников")
       })
       .finally(() => setLoading(false))
-  }, [page, search])
+  }, [page, search, sortBy])
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
@@ -149,6 +155,23 @@ export default function EmployeesPage() {
             Найти
           </button>
         </form>
+        <div className="mt-3 flex items-center gap-2 text-sm">
+          <label htmlFor="employees-sort" className="text-muted-foreground">
+            Сортировка:
+          </label>
+          <select
+            id="employees-sort"
+            value={sortBy}
+            onChange={(e) => {
+              setSortBy(e.target.value === "birth_date" ? "birth_date" : "name")
+              setPage(1)
+            }}
+            className="h-9 rounded-md border border-input bg-background px-3"
+          >
+            <option value="name">По ФИО</option>
+            <option value="birth_date">По дате рождения</option>
+          </select>
+        </div>
       </div>
 
       {loading ? (

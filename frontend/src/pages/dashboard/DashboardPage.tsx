@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
-import { AlertTriangle, Ticket } from "lucide-react"
+import { AlertTriangle, Ticket, Cake } from "lucide-react"
 
 import { useAuthStore } from "@/features/auth/store"
-import type { Dashboard } from "@/shared/types"
+import type { BirthdayEntry, Dashboard } from "@/shared/types"
 import {
   PRIORITY_COLORS,
   PRIORITY_LABELS,
@@ -12,9 +12,11 @@ import {
   cn,
   formatRelative,
 } from "@/lib/utils"
+import { getBirthdays } from "@/features/employees/api"
 
 export default function DashboardPage() {
   const [data, setData] = useState<Dashboard | null>(null)
+  const [birthdaysTomorrow, setBirthdaysTomorrow] = useState<BirthdayEntry[]>([])
   const [loading, setLoading] = useState(true)
 
   const { isIT } = useAuthStore()
@@ -40,6 +42,13 @@ export default function DashboardPage() {
       })
       .finally(() => {
         setLoading(false)
+      })
+
+    getBirthdays("tomorrow")
+      .then(setBirthdaysTomorrow)
+      .catch((err) => {
+        console.error("DASHBOARD BIRTHDAYS TOMORROW ERROR:", err)
+        setBirthdaysTomorrow([])
       })
   }, [])
 
@@ -151,6 +160,75 @@ export default function DashboardPage() {
           <Link to="/tickets" className="text-sm text-primary hover:underline">
             Все заявки →
           </Link>
+        </section>
+
+        <section className="space-y-3 rounded-lg border border-border p-4">
+          <h2 className="flex items-center gap-2 font-semibold">
+            <Cake className="h-4 w-4 text-pink-500" />
+            Ближайшие дни рождения
+          </h2>
+
+          <div className="space-y-3 text-sm">
+            <div>
+              <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Сегодня</p>
+              {data.birthdays_today.length === 0 ? (
+                <p className="text-muted-foreground">Нет именинникв</p>
+              ) : (
+                <ul className="space-y-1">
+                  {data.birthdays_today.slice(0, 3).map((item) => (
+                    <li key={item.id}>
+                      <Link to={`/employees/${item.id}`} className="hover:underline">
+                        {item.full_name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div>
+              <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Завтра</p>
+              {birthdaysTomorrow.length === 0 ? (
+                <p className="text-muted-foreground">Нет именинников</p>
+              ) : (
+                <ul className="space-y-1">
+                  {birthdaysTomorrow.slice(0, 3).map((item) => (
+                    <li key={item.id}>
+                      <Link to={`/employees/${item.id}`} className="hover:underline">
+                        {item.full_name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div>
+              <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">На этой неделе</p>
+              {data.birthdays_week.length === 0 ? (
+                <p className="text-muted-foreground">Нет именинников</p>
+              ) : (
+                <ul className="space-y-1">
+                  {data.birthdays_week.slice(0, 5).map((item) => (
+                    <li key={item.id}>
+                      <Link to={`/employees/${item.id}`} className="hover:underline">
+                        {item.full_name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3 text-sm">
+            <Link to="/birthdays" className="text-primary hover:underline">
+              Все дни рождения →
+            </Link>
+            <Link to="/employees?sort=birth_date" className="text-primary hover:underline">
+              Сотрудники по дате рождения →
+            </Link>
+          </div>
         </section>
       </div>
     </div>

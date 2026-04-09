@@ -60,6 +60,7 @@ async def list_employees(
     search: str | None = Query(None, max_length=200),
     department_id: UUID | None = Query(None),
     is_active: bool | None = Query(True),
+    sort_by: str = Query("name", description="name or birth_date"),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ) -> EmployeeListResponse:
@@ -70,6 +71,7 @@ async def list_employees(
         search=search,
         department_id=department_id,
         is_active=is_active,
+        sort_by=sort_by,
     )
     items = [EmployeeRead(**_employee_to_read_dict(employee)) for employee in employees]
     return EmployeeListResponse(items=items, total=total, page=page, size=size)
