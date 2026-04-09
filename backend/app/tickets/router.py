@@ -341,9 +341,9 @@ async def list_comments(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
 
     can_access_comments = (
-        ticket.author_id == current_user.id
+        current_user.role == UserRole.admin
+        or ticket.author_id == current_user.id
         or ticket.assignee_id == current_user.id
-        or current_user.role in (UserRole.it_specialist, UserRole.admin)
     )
     if not can_access_comments:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
@@ -374,9 +374,9 @@ async def create_comment(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
 
     can_access_comments = (
-        ticket.author_id == current_user.id
+        current_user.role == UserRole.admin
+        or ticket.author_id == current_user.id
         or ticket.assignee_id == current_user.id
-        or current_user.role in (UserRole.it_specialist, UserRole.admin)
     )
     if not can_access_comments:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
