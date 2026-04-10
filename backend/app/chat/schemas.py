@@ -10,8 +10,8 @@ class ChatMessageRead(BaseModel):
     author_name: str | None = None
     text: str
     is_pinned: bool
+    is_deleted: bool
     created_at: datetime
-    is_deleted: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -22,4 +22,6 @@ class ChatMessageCreate(BaseModel):
 
 class ChatMessageListResponse(BaseModel):
     items: list[ChatMessageRead]
-    has_more: bool
+    total: int
+    page: int
+    size: int

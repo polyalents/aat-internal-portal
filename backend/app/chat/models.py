@@ -12,22 +12,23 @@ class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
     author_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id"),
         nullable=False,
         index=True,
     )
+
     text: Mapped[str] = mapped_column(Text, nullable=False)
-    is_pinned: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    is_pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    author: Mapped["User"] = relationship("User")
-
-    @property
-    def is_deleted(self) -> bool:
-        return self.deleted_at is not None
+    author = relationship("User")
 
     def __repr__(self) -> str:
         return f"<ChatMessage id={self.id} author_id={self.author_id}>"

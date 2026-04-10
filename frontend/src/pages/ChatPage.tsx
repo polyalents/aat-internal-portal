@@ -363,7 +363,7 @@ export default function ChatPage() {
           )}
         </div>
 
-        <form onSubmit={handleSend} className="overflow-hidden border-t border-border bg-card p-3 sm:rounded-b-xl sm:p-4">
+        <form onSubmit={handleSend} className="border-t border-border bg-card p-3 sm:rounded-b-xl sm:p-4">
           <div className="space-y-3">
             <textarea
               value={text}
@@ -374,14 +374,17 @@ export default function ChatPage() {
             />
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div className="relative">
+              <div
+                className="relative self-start"
+                onMouseEnter={clearEmojiCloseTimer}
+                onMouseLeave={scheduleEmojiClose}
+              >
                 <button
                   type="button"
                   onClick={() => {
                     clearEmojiCloseTimer()
                     setShowEmojiPicker((prev) => !prev)
                   }}
-                  onMouseEnter={clearEmojiCloseTimer}
                   className="inline-flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm transition hover:bg-accent"
                 >
                   <Smile className="h-4 w-4" />
@@ -389,11 +392,7 @@ export default function ChatPage() {
                 </button>
 
                 {showEmojiPicker && (
-                  <div
-                    className="absolute bottom-full left-0 z-20 mb-2 w-[220px] rounded-xl border border-border bg-background p-3 shadow-lg"
-                    onMouseEnter={clearEmojiCloseTimer}
-                    onMouseLeave={scheduleEmojiClose}
-                  >
+                  <div className="absolute bottom-full left-0 z-50 mb-2 w-[220px] rounded-xl border border-border bg-background p-3 shadow-xl">
                     <div className="grid grid-cols-4 gap-2">
                       {EMOJIS.map((emoji) => (
                         <button

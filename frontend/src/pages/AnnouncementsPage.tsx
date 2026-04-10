@@ -9,7 +9,7 @@ import {
 } from "@/features/portal/api"
 import { useAuthStore } from "@/features/auth/store"
 import type { Announcement } from "@/shared/types"
-import { formatDateTime, cn } from "@/lib/utils"
+import { cn, formatDateTime } from "@/lib/utils"
 
 type FormState = {
   title: string
@@ -150,14 +150,14 @@ export default function AnnouncementsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900">
+            <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
               <Megaphone className="h-6 w-6" />
               Объявления
             </h1>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-muted-foreground">
               Важные сообщения и обновления для сотрудников
             </p>
           </div>
@@ -166,7 +166,7 @@ export default function AnnouncementsPage() {
             <button
               type="button"
               onClick={openCreate}
-              className="inline-flex w-full items-center justify-center gap-2 self-start rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 sm:w-auto"
+              className="inline-flex w-full items-center justify-center gap-2 self-start rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:opacity-90 sm:w-auto"
             >
               <Plus className="h-4 w-4" />
               Новое объявление
@@ -176,7 +176,7 @@ export default function AnnouncementsPage() {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}
         </div>
       )}
@@ -184,38 +184,38 @@ export default function AnnouncementsPage() {
       {canManage && (isCreating || editingId) && (
         <form
           onSubmit={handleSubmit}
-          className="space-y-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
+          className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-sm"
         >
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Заголовок</label>
+            <label className="mb-1 block text-sm font-medium text-foreground">Заголовок</label>
             <input
               type="text"
               value={form.title}
               onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none transition focus:border-ring"
               placeholder="Например: Профилактические работы в пятницу"
               required
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Текст объявления</label>
+            <label className="mb-1 block text-sm font-medium text-foreground">Текст объявления</label>
             <textarea
               value={form.content}
               onChange={(e) => setForm((prev) => ({ ...prev, content: e.target.value }))}
-              className="min-h-[140px] w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500"
+              className="min-h-[140px] w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none transition focus:border-ring"
               placeholder="Подробности объявления..."
               required
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Срок действия</label>
+            <label className="mb-1 block text-sm font-medium text-foreground">Срок действия</label>
             <input
               type="datetime-local"
               value={form.expires_at}
               onChange={(e) => setForm((prev) => ({ ...prev, expires_at: e.target.value }))}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm outline-none transition focus:border-ring"
             />
           </div>
 
@@ -223,7 +223,7 @@ export default function AnnouncementsPage() {
             <button
               type="submit"
               disabled={saving}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90 disabled:opacity-60"
             >
               <Save className="h-4 w-4" />
               {saving ? "Сохранение..." : editingId ? "Сохранить" : "Создать"}
@@ -232,7 +232,7 @@ export default function AnnouncementsPage() {
             <button
               type="button"
               onClick={resetForm}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
             >
               <X className="h-4 w-4" />
               Отмена
@@ -243,11 +243,11 @@ export default function AnnouncementsPage() {
 
       {loading ? (
         <div className="flex h-40 items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
+          <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
         </div>
       ) : announcements.length === 0 ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-10 text-center text-gray-500">
-          <Megaphone className="mx-auto mb-3 h-10 w-10 text-gray-300" />
+        <div className="rounded-xl border border-border bg-card p-10 text-center text-muted-foreground">
+          <Megaphone className="mx-auto mb-3 h-10 w-10 opacity-40" />
           Объявлений пока нет
         </div>
       ) : (
@@ -259,15 +259,15 @@ export default function AnnouncementsPage() {
               <article
                 key={item.id}
                 className={cn(
-                  "rounded-xl border bg-white p-5 shadow-sm transition",
-                  expired ? "border-amber-200 bg-amber-50/40" : "border-gray-200"
+                  "rounded-xl border bg-card p-5 shadow-sm transition",
+                  expired ? "border-amber-300/60 bg-amber-100/10" : "border-border"
                 )}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       {!item.is_active && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
                           <EyeOff className="h-3.5 w-3.5" />
                           Неактивно
                         </span>
@@ -280,13 +280,13 @@ export default function AnnouncementsPage() {
                       )}
                     </div>
 
-                    <h2 className="text-lg font-semibold text-gray-900">{item.title}</h2>
+                    <h2 className="text-lg font-semibold text-foreground">{item.title}</h2>
 
-                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-700">
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground/90">
                       {item.content}
                     </p>
 
-                    <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-gray-500">
+                    <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1">
                         <Calendar className="h-3.5 w-3.5" />
                         Опубликовано: {formatDateTime(item.published_at)}
@@ -305,7 +305,7 @@ export default function AnnouncementsPage() {
                       <button
                         type="button"
                         onClick={() => openEdit(item)}
-                        className="rounded-lg border border-gray-200 p-2 text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+                        className="rounded-lg border border-border p-2 text-muted-foreground transition hover:bg-accent hover:text-foreground"
                         title="Редактировать"
                       >
                         <Pencil className="h-4 w-4" />
@@ -334,12 +334,12 @@ export default function AnnouncementsPage() {
             type="button"
             disabled={page === 1}
             onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 disabled:opacity-40"
+            className="rounded-lg border border-border px-3 py-2 text-sm text-foreground disabled:opacity-40"
           >
             Назад
           </button>
 
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-muted-foreground">
             {page} из {totalPages}
           </span>
 
@@ -347,7 +347,7 @@ export default function AnnouncementsPage() {
             type="button"
             disabled={page >= totalPages}
             onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 disabled:opacity-40"
+            className="rounded-lg border border-border px-3 py-2 text-sm text-foreground disabled:opacity-40"
           >
             Вперёд
           </button>

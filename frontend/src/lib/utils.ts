@@ -44,12 +44,12 @@ export const STATUS_LABELS: Record<TicketStatus, string> = {
 }
 
 export const STATUS_COLORS: Record<TicketStatus, string> = {
-  new: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
-  in_progress: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
-  waiting: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
-  completed: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
-  rejected: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-  escalated: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+  new: "border border-blue-300 bg-blue-100 text-blue-800 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100",
+  in_progress: "border border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100",
+  waiting: "border border-orange-300 bg-orange-100 text-orange-800 dark:border-orange-700 dark:bg-orange-900 dark:text-orange-100",
+  completed: "border border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-100",
+  rejected: "border border-rose-300 bg-rose-100 text-rose-800 dark:border-rose-700 dark:bg-rose-900 dark:text-rose-100",
+  escalated: "border border-violet-300 bg-violet-100 text-violet-800 dark:border-violet-700 dark:bg-violet-900 dark:text-violet-100",
 }
 
 export const PRIORITY_LABELS: Record<TicketPriority, string> = {
@@ -59,9 +59,9 @@ export const PRIORITY_LABELS: Record<TicketPriority, string> = {
 }
 
 export const PRIORITY_COLORS: Record<TicketPriority, string> = {
-  now: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
-  today: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
-  normal: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+  now: "border border-rose-300 bg-rose-100 text-rose-800 dark:border-rose-700 dark:bg-rose-900 dark:text-rose-100",
+  today: "border border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100",
+  normal: "border border-slate-300 bg-slate-100 text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100",
 }
 
 export const ROLE_LABELS: Record<string, string> = {

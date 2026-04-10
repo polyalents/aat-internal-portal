@@ -64,9 +64,7 @@ export default function TicketsPage() {
   const [page, setPage] = useState(Number(searchParams.get("page")) || 1)
   const [archived, setArchived] = useState(searchParams.get("archived") === "true")
   const [cleanupLoading, setCleanupLoading] = useState(false)
-  const [scope, setScope] = useState<TicketScope>(
-    (searchParams.get("scope") as TicketScope) || "all"
-  )
+  const [scope, setScope] = useState((searchParams.get("scope") as TicketScope) || "all")
 
   const fetchTickets = useCallback(async () => {
     setLoading(true)
@@ -87,12 +85,8 @@ export default function TicketsPage() {
         archived,
       }
 
-      if (status) {
-        params.status = status
-      }
-      if (search.trim()) {
-        params.search = search.trim()
-      }
+      if (status) params.status = status
+      if (search.trim()) params.search = search.trim()
 
       if (isIT) {
         if (scope === "unassigned") {
@@ -104,7 +98,6 @@ export default function TicketsPage() {
       }
 
       const res = await getTickets(params)
-
       setTickets(res.items)
       setTotal(res.total)
     } catch (err) {
@@ -171,7 +164,7 @@ export default function TicketsPage() {
           {isIT && (
             <button
               onClick={() => setArchived((v) => !v)}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-2 hover:bg-accent sm:w-auto"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-foreground shadow-sm transition hover:bg-accent sm:w-auto"
             >
               <Archive className="h-4 w-4" />
               {archived ? "Скрыть архив" : "Показать архив"}
@@ -182,7 +175,7 @@ export default function TicketsPage() {
             <button
               onClick={handleCleanup}
               disabled={cleanupLoading}
-              className="w-full rounded-lg border border-red-300 px-4 py-2 text-red-600 hover:bg-red-50 disabled:opacity-60 sm:w-auto"
+              className="w-full rounded-xl border border-red-300/60 px-4 py-2 text-red-600 transition hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/10 disabled:opacity-60 sm:w-auto"
             >
               {cleanupLoading ? "Очистка..." : "Очистить старые"}
             </button>
@@ -190,7 +183,7 @@ export default function TicketsPage() {
 
           <button
             onClick={() => navigate("/tickets/new")}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-white hover:bg-primary/90 sm:w-auto"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-primary-foreground shadow-sm transition hover:opacity-90 sm:w-auto"
           >
             <Plus className="h-4 w-4" />
             Создать заявку
@@ -207,8 +200,10 @@ export default function TicketsPage() {
               setPage(1)
             }}
             className={cn(
-              "rounded-lg border px-4 py-2 text-sm transition",
-              scope === "all" ? "bg-primary text-white" : "hover:bg-accent"
+              "rounded-xl border px-4 py-2 text-sm transition",
+              scope === "all"
+                ? "border-transparent bg-zinc-900 text-white shadow-sm dark:border-border dark:bg-accent dark:text-accent-foreground"
+                : "border-border bg-card text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground"
             )}
           >
             Все заявки
@@ -221,8 +216,10 @@ export default function TicketsPage() {
               setPage(1)
             }}
             className={cn(
-              "rounded-lg border px-4 py-2 text-sm transition",
-              scope === "unassigned" ? "bg-primary text-white" : "hover:bg-accent"
+              "rounded-xl border px-4 py-2 text-sm transition",
+              scope === "unassigned"
+                ? "border-foreground/10 bg-foreground text-background shadow-sm dark:border-border dark:bg-accent dark:text-accent-foreground"
+                : "border-border bg-card text-foreground/80 shadow-sm hover:bg-accent hover:text-accent-foreground"
             )}
           >
             Без исполнителя
@@ -235,8 +232,10 @@ export default function TicketsPage() {
               setPage(1)
             }}
             className={cn(
-              "inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition",
-              scope === "assigned" ? "bg-primary text-white" : "hover:bg-accent"
+              "inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm transition",
+              scope === "assigned"
+                ? "border-foreground/10 bg-foreground text-background shadow-sm dark:border-border dark:bg-accent dark:text-accent-foreground"
+                : "border-border bg-card text-foreground/80 shadow-sm hover:bg-accent hover:text-accent-foreground"
             )}
           >
             <Briefcase className="h-4 w-4" />
@@ -255,7 +254,7 @@ export default function TicketsPage() {
               setPage(1)
             }}
             placeholder="Поиск..."
-            className="w-full rounded-lg border py-2 pl-10 pr-4"
+            className="w-full rounded-xl border border-input bg-card py-2 pl-10 pr-4 text-foreground shadow-sm outline-none transition focus:border-ring"
           />
         </div>
 
@@ -265,7 +264,7 @@ export default function TicketsPage() {
             setStatus(e.target.value)
             setPage(1)
           }}
-          className="w-full rounded-lg border px-4 py-2 sm:w-auto"
+          className="w-full rounded-xl border border-input bg-card px-4 py-2 text-foreground shadow-sm outline-none transition focus:border-ring sm:w-auto"
         >
           {STATUS_FILTER_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -277,19 +276,15 @@ export default function TicketsPage() {
 
       {loading ? (
         <div className="flex justify-center py-20">
-          <div className="h-6 w-6 animate-spin border-b-2 border-primary" />
+          <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-primary" />
         </div>
       ) : error ? (
         <div className="py-10 text-center text-red-500">{error}</div>
       ) : tickets.length === 0 ? (
-        <div className="rounded-xl border py-16 text-center">
+        <div className="rounded-xl border border-border bg-card py-16 text-center shadow-sm">
           <Ticket className="mx-auto mb-3 text-muted-foreground" />
           <p className="text-muted-foreground">
-            {search || status
-              ? "Ничего не найдено"
-              : archived
-                ? "Архив пуст"
-                : "Заявок пока нет"}
+            {search || status ? "Ничего не найдено" : archived ? "Архив пуст" : "Заявок пока нет"}
           </p>
         </div>
       ) : (
@@ -298,7 +293,7 @@ export default function TicketsPage() {
             <Link
               key={t.id}
               to={`/tickets/${t.id}`}
-              className="block rounded-xl border p-4 hover:shadow"
+              className="block rounded-xl border border-border bg-card p-4 shadow-sm transition hover:bg-accent/40 hover:shadow-md"
             >
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
@@ -307,23 +302,23 @@ export default function TicketsPage() {
                       #{t.number || t.id.slice(0, 6)}
                     </span>
 
-                    <span className={cn("flex items-center gap-1 rounded px-2 text-xs", STATUS_COLORS[t.status])}>
+                    <span className={cn("flex items-center gap-1 rounded-full px-2.5 py-1 text-xs", STATUS_COLORS[t.status])}>
                       {STATUS_ICONS[t.status]}
                       {STATUS_LABELS[t.status]}
                     </span>
 
-                    <span className={cn("rounded px-2 text-xs", PRIORITY_COLORS[t.priority])}>
+                    <span className={cn("rounded-full px-2.5 py-1 text-xs", PRIORITY_COLORS[t.priority])}>
                       {PRIORITY_LABELS[t.priority]}
                     </span>
 
                     {t.is_archived && (
-                      <span className="rounded bg-muted px-2 text-xs text-muted-foreground">
+                      <span className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
                         Архив
                       </span>
                     )}
                   </div>
 
-                  <div className="break-words font-medium">{t.subject}</div>
+                  <div className="break-words font-medium text-foreground">{t.subject}</div>
                 </div>
 
                 <div className="text-xs text-muted-foreground sm:whitespace-nowrap">
@@ -337,15 +332,23 @@ export default function TicketsPage() {
 
       {totalPages > 1 && (
         <div className="flex flex-wrap items-center justify-center gap-3">
-          <button disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
+          <button
+            disabled={page === 1}
+            onClick={() => setPage((p) => p - 1)}
+            className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm transition hover:bg-accent disabled:opacity-40"
+          >
             Назад
           </button>
 
-          <span>
+          <span className="text-sm text-muted-foreground">
             {page} / {totalPages}
           </span>
 
-          <button disabled={page === totalPages} onClick={() => setPage((p) => p + 1)}>
+          <button
+            disabled={page === totalPages}
+            onClick={() => setPage((p) => p + 1)}
+            className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-foreground shadow-sm transition hover:bg-accent disabled:opacity-40"
+          >
             Вперёд
           </button>
         </div>

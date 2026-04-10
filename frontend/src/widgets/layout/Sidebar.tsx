@@ -40,16 +40,11 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
   return (
     <>
-      {open && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-          onClick={onClose}
-        />
-      )}
+      {open && <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={onClose} />}
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-border bg-sidebar text-sidebar-foreground transition-transform duration-200 lg:static lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-200 lg:static lg:translate-x-0",
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -61,7 +56,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 hover:bg-sidebar-accent lg:hidden"
+            className="rounded-md p-1.5 transition hover:bg-sidebar-accent lg:hidden"
           >
             <X className="h-5 w-5" />
           </button>
@@ -79,10 +74,10 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                 to={item.to}
                 onClick={onClose}
                 className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all",
                   isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    ? "border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
+                    : "border-transparent text-sidebar-foreground/78 hover:border-sidebar-border hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
                 )}
               >
                 <item.icon className="h-4 w-4 shrink-0" />
@@ -102,10 +97,10 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                   to="/admin/users"
                   onClick={onClose}
                   className={cn(
-                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                    "flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all",
                     location.pathname.startsWith("/admin")
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      ? "border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
+                      : "border-transparent text-sidebar-foreground/78 hover:border-sidebar-border hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
                   )}
                 >
                   <Shield className="h-4 w-4 shrink-0" />
@@ -126,10 +121,10 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                 to={item.to}
                 onClick={onClose}
                 className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm font-medium transition-all",
                   isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    ? "border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
+                    : "border-transparent text-sidebar-foreground/78 hover:border-sidebar-border hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
                 )}
               >
                 <item.icon className="h-4 w-4 shrink-0" />
