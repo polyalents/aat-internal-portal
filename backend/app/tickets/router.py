@@ -36,8 +36,8 @@ from app.tickets.service import (
     get_category_by_id,
     get_comments,
     get_history,
-    get_ticket_by_id,
     get_ticket_assignees,
+    get_ticket_by_id,
     get_ticket_stats,
     get_tickets,
     restore_ticket,
@@ -45,6 +45,7 @@ from app.tickets.service import (
     update_ticket,
 )
 from app.tasks.celery_app import celery_app
+from app.uploads.security import validate_ticket_attachment
 from app.users.models import User, UserRole
 
 router = APIRouter()
@@ -279,7 +280,10 @@ async def archive_existing_ticket(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
 
     if ticket.status not in (TicketStatus.completed, TicketStatus.rejected):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only completed or rejected tickets can be archived")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only completed or rejected tickets can be archived",
+        )
 
     ticket = await archive_ticket(db, ticket, current_user)
     return _ticket_to_read(ticket)
@@ -313,7 +317,10 @@ async def remove_ticket_permanently(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
 
     if not ticket.is_archived:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ticket must be archived before permanent deletion")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ticket must be archived before permanent deletion",
+        )
 
     await delete_ticket_permanently(db, ticket)
 
@@ -456,7 +463,8 @@ async def upload_attachment(
             detail="Total attachments size limit exceeded",
         )
 
-    ext = file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "bin"
+    original_name = file.filename or "attachment.bin"
+    safe_original_name, ext, detected_mime = validate_ticket_attachment(original_name, content)
     stored_name = f"{uuid4().hex}.{ext}"
 
     attach_dir = Path(settings.upload_dir) / "tickets" / str(ticket_id)
@@ -470,10 +478,10 @@ async def upload_attachment(
 
     attachment = TicketAttachment(
         ticket_id=ticket_id,
-        filename=file.filename or stored_name,
+        filename=safe_original_name,
         file_path=f"/uploads/tickets/{ticket_id}/{stored_name}",
         file_size=len(content),
-        content_type=file.content_type or "application/octet-stream",
+        content_type=detected_mime,
     )
     db.add(attachment)
     await db.commit()

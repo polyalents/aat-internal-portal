@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.exceptions import register_exception_handlers
 from app.middleware.rate_limit import RateLimitMiddleware
-
+from app.middleware.security_headers import SecurityHeadersMiddleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -31,19 +31,20 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="AAT Portal API",
         version="0.1.0",
-        docs_url="/api/docs",
-        openapi_url="/api/openapi.json",
+        docs_url="/api/docs" if settings.debug else None,
+        openapi_url="/api/openapi.json" if settings.debug else None,
         lifespan=lifespan,
         redirect_slashes=False,
     )
 
+    app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=settings.cors_allow_methods_list,
+        allow_headers=settings.cors_allow_headers_list,
     )
 
     register_exception_handlers(app)

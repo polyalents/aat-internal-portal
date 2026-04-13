@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from jose import JWTError, jwt
 
@@ -26,18 +26,23 @@ def create_access_token(user_id: UUID, role: str) -> str:
     return jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
 
 
-def create_refresh_token(user_id: UUID) -> str:
+def build_refresh_claims(user_id: UUID) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     expire = now + timedelta(days=settings.refresh_token_expire_days)
+    jti = uuid4()
 
     payload = {
         "sub": str(user_id),
+        "jti": str(jti),
         "type": TOKEN_TYPE_REFRESH,
         "iat": now,
         "nbf": now,
         "exp": expire,
     }
+    return payload
 
+
+def encode_refresh_token(payload: dict[str, Any]) -> str:
     return jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
 
 
@@ -64,6 +69,10 @@ def verify_access_token(token: str) -> dict[str, Any] | None:
 
 def verify_refresh_token(token: str) -> dict[str, Any] | None:
     payload = decode_token(token)
-    if payload is None or payload.get("type") != TOKEN_TYPE_REFRESH:
+    if payload is None:
+        return None
+    if payload.get("type") != TOKEN_TYPE_REFRESH:
+        return None
+    if "jti" not in payload:
         return None
     return payload

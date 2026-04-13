@@ -512,7 +512,7 @@ export default function TicketDetailPage() {
                 key={attachment.id}
                 href={attachment.file_path}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="block rounded-lg border border-border p-3 text-sm"
               >
                 <div className="font-medium">{attachment.filename}</div>

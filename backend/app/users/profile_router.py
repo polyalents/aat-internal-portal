@@ -13,18 +13,17 @@ from app.employees.service import (
     get_employee_by_user_id,
     update_employee,
 )
+from app.uploads.security import validate_profile_photo
 from app.users.models import User
 
 router = APIRouter()
 
-ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_PHOTO_SIZE = 5 * 1024 * 1024
 
 
 def _save_profile_photo(old_photo_url: str | None, content: bytes, filename: str) -> str:
-    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "jpg"
-    safe_ext = ext if ext in {"jpg", "jpeg", "png", "webp"} else "jpg"
-    generated_filename = f"{uuid4().hex}.{safe_ext}"
+    _, ext, _ = validate_profile_photo(filename, content)
+    generated_filename = f"{uuid4().hex}.{ext}"
 
     photo_dir = Path(settings.upload_dir) / "photos"
     photo_dir.mkdir(parents=True, exist_ok=True)
@@ -34,25 +33,9 @@ def _save_profile_photo(old_photo_url: str | None, content: bytes, filename: str
 
     if old_photo_url and old_photo_url.startswith("/uploads/photos/"):
         old_path = Path(settings.upload_dir) / "photos" / Path(old_photo_url).name
-        if old_path.exists():
-            old_path.unlink(missing_ok=True)
+        old_path.unlink(missing_ok=True)
 
     return f"/uploads/photos/{generated_filename}"
-
-
-@router.get("/debug")
-async def debug_profile(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    employee = await get_employee_by_user_id(db, current_user.id)
-    return {
-        "current_user_id": str(current_user.id),
-        "current_user_email": getattr(current_user, "email", None),
-        "employee_found": employee is not None,
-        "employee_id": str(employee.id) if employee else None,
-        "employee_user_id": str(employee.user_id) if employee else None,
-    }
 
 
 @router.get("", response_model=EmployeeRead)
@@ -64,7 +47,7 @@ async def get_profile(
     if employee is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Profile not found for user_id={current_user.id}",
+            detail="Profile not found",
         )
 
     return EmployeeRead(**_employee_to_read_dict(employee))
@@ -80,7 +63,7 @@ async def patch_profile(
     if employee is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Profile not found for user_id={current_user.id}",
+            detail="Profile not found",
         )
 
     allowed_fields = {
@@ -117,13 +100,7 @@ async def upload_profile_photo(
     if employee is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Profile not found for user_id={current_user.id}",
-        )
-
-    if file.content_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only JPEG, PNG, and WebP images are allowed",
+            detail="Profile not found",
         )
 
     content = await file.read()
@@ -135,7 +112,8 @@ async def upload_profile_photo(
             detail="Photo size must be under 5 MB",
         )
 
-    employee.photo_url = _save_profile_photo(employee.photo_url, content, file.filename or "photo.jpg")
+    original_name = file.filename or "photo.jpg"
+    employee.photo_url = _save_profile_photo(employee.photo_url, content, original_name)
     await db.commit()
     await db.refresh(employee)
 

@@ -51,7 +51,18 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
             or (request.client.host if request.client else "unknown")
         )
-        key = f"rate_limit:login:{client_ip}"
+
+        username = "_"
+        try:
+            body = await request.body()
+            if body:
+                payload = json.loads(body)
+                if isinstance(payload, dict) and isinstance(payload.get("username"), str):
+                    username = payload["username"].strip().lower()[:100] or "_"
+        except Exception:
+            username = "_"
+
+        key = f"rate_limit:login:{client_ip}:{username}"
 
         try:
             current = await redis_client.get(key)
