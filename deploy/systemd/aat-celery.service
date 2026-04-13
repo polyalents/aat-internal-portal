@@ -1,0 +1,22 @@
+[Unit]
+Description=AAT Celery Worker
+After=network.target
+
+[Service]
+Type=simple
+User=admin865
+Group=www-data
+WorkingDirectory=/home/admin865/aat-internal-portal/backend
+EnvironmentFile=/home/admin865/aat-internal-portal/backend/.env
+ExecStartPre=/bin/mkdir -p /run/aat-celery
+ExecStartPre=/bin/chown admin865:www-data /run/aat-celery
+ExecStart=/home/admin865/aat-internal-portal/backend/.venv/bin/celery -A app.tasks.celery_app:celery_app worker --loglevel=INFO --hostname=aat-worker@%H --pidfile=/run/aat-celery/worker.pid
+Restart=always
+RestartSec=5
+RuntimeDirectory=aat-celery
+RuntimeDirectoryMode=0755
+KillMode=mixed
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
