@@ -2,6 +2,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.announcements.models import Announcement
 from app.announcements.schemas import AnnouncementCreate, AnnouncementUpdate
@@ -13,7 +14,7 @@ async def get_announcements(
     size: int = 10,
     active_only: bool = True,
 ) -> tuple[list[Announcement], int]:
-    stmt = select(Announcement)
+    stmt = select(Announcement).options(joinedload(Announcement.author))
     count_stmt = select(func.count()).select_from(Announcement)
 
     if active_only:
@@ -29,12 +30,14 @@ async def get_announcements(
     )
 
     result = await db.execute(stmt)
-    return list(result.scalars().all()), total
+    return list(result.scalars().unique().all()), total
 
 
 async def get_announcement_by_id(db: AsyncSession, announcement_id: UUID) -> Announcement | None:
     result = await db.execute(
-        select(Announcement).where(Announcement.id == announcement_id)
+        select(Announcement)
+        .options(joinedload(Announcement.author))
+        .where(Announcement.id == announcement_id)
     )
     return result.scalar_one_or_none()
 

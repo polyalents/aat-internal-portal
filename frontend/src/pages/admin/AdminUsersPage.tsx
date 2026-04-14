@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from "react"
 import { isAxiosError } from "axios"
+import { useNavigate } from "react-router-dom"
 
 import {
   changeAdminUserPassword,
   createAdminUser,
+  deactivateAdminUser,
   deleteAdminUser,
   getAdminUsers,
+  restoreAdminUser,
   updateAdminUser,
 } from "@/features/admin/api"
 import type { User, UserRole } from "@/shared/types"
@@ -18,9 +21,14 @@ const ROLES: Array<{ value: UserRole; label: string }> = [
   { value: "admin", label: "Администратор" },
 ]
 
+type Mode = "active" | "inactive"
+
 export default function AdminUsersPage() {
+  const navigate = useNavigate()
+
   const [users, setUsers] = useState<User[]>([])
   const [search, setSearch] = useState("")
+  const [mode, setMode] = useState<Mode>("active")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
@@ -30,7 +38,7 @@ export default function AdminUsersPage() {
   const [password, setPassword] = useState("")
   const [role, setRole] = useState<UserRole>("employee")
 
-  async function loadUsers(query?: string) {
+  async function loadUsers(query?: string, nextMode: Mode = mode) {
     setLoading(true)
     setError(null)
 
@@ -39,6 +47,7 @@ export default function AdminUsersPage() {
         page: 1,
         size: 100,
         search: query || undefined,
+        is_active: nextMode === "active",
       })
       setUsers(data.items)
     } catch {
@@ -49,8 +58,8 @@ export default function AdminUsersPage() {
   }
 
   useEffect(() => {
-    void loadUsers()
-  }, [])
+    void loadUsers("", mode)
+  }, [mode])
 
   const stats = useMemo(
     () => ({
@@ -72,13 +81,25 @@ export default function AdminUsersPage() {
     setInfo(null)
 
     try {
-      await createAdminUser({ username, email, password, role, is_it_manager: false })
+      const created = await createAdminUser({
+        username,
+        email,
+        password,
+        role,
+        is_it_manager: false,
+      })
+
       setUsername("")
       setEmail("")
       setPassword("")
       setRole("employee")
-      setInfo("Учётная запись создана")
-      await loadUsers(search)
+
+      navigate(`/admin/employees?create_for_user=${created.id}`, {
+        state: {
+          infoMessage: `Создайте карточку сотрудника для профиля «${created.username}».`,
+        },
+      })
+      return
     } catch (err) {
       if (isAxiosError(err) && err.response?.status === 409) {
         setError("Конфликт: логин или email уже существует")
@@ -116,6 +137,30 @@ export default function AdminUsersPage() {
     }
   }
 
+  async function handleDeactivate(user: User) {
+    setError(null)
+    setInfo(null)
+    try {
+      await deactivateAdminUser(user.id)
+      setInfo(`Учётная запись ${user.username} деактивирована`)
+      await loadUsers(search)
+    } catch {
+      setError("Не удалось деактивировать учётную запись")
+    }
+  }
+
+  async function handleRestore(user: User) {
+    setError(null)
+    setInfo(null)
+    try {
+      await restoreAdminUser(user.id)
+      setInfo(`Учётная запись ${user.username} восстановлена`)
+      await loadUsers(search)
+    } catch {
+      setError("Не удалось восстановить учётную запись")
+    }
+  }
+
   async function handleDelete(user: User) {
     setError(null)
     setInfo(null)
@@ -125,7 +170,9 @@ export default function AdminUsersPage() {
       await loadUsers(search)
     } catch (err) {
       if (isAxiosError(err) && err.response?.status === 409) {
-        setError("Удаление недоступно: учётная запись используется в связанных данных")
+        setError(
+          "Удаление недоступно: учётная запись связана с историческими данными. Используйте деактивацию."
+        )
         return
       }
       setError("Не удалось удалить учётную запись")
@@ -134,9 +181,7 @@ export default function AdminUsersPage() {
 
   async function handlePasswordChange(user: User) {
     const newPassword = window.prompt(`Введите новый пароль для ${user.username}`)
-    if (newPassword === null) {
-      return
-    }
+    if (newPassword === null) return
 
     if (!newPassword.trim()) {
       setError("Новый пароль не может быть пустым")
@@ -162,12 +207,17 @@ export default function AdminUsersPage() {
       <div>
         <h2 className="text-xl font-semibold">Учётные записи</h2>
         <p className="text-sm text-muted-foreground">
-          Создание и управление аккаунтами для входа в портал.
+          Деактивируйте учётные записи с историей данных, удаляйте только неиспользуемые.
         </p>
       </div>
 
       {error && <div className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
       {info && <div className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-700">{info}</div>}
+
+      <div className="flex gap-2">
+        <Button variant={mode === "active" ? "default" : "outline"} onClick={() => setMode("active")}>Активные</Button>
+        <Button variant={mode === "inactive" ? "default" : "outline"} onClick={() => setMode("inactive")}>Деактивированные</Button>
+      </div>
 
       <div className="grid gap-3 md:grid-cols-4">
         <div className="rounded-lg border p-3 text-sm">Всего учётных записей: {stats.total}</div>
@@ -181,21 +231,14 @@ export default function AdminUsersPage() {
         <div className="grid gap-2 md:grid-cols-5">
           <Input placeholder="Логин" value={username} onChange={(e) => setUsername(e.target.value)} />
           <Input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <Input
-            type="password"
-            placeholder="Пароль"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+          <Input type="password" placeholder="Пароль" value={password} onChange={(e) => setPassword(e.target.value)} />
           <select
             className="h-10 rounded-md border bg-background px-3 text-sm"
             value={role}
             onChange={(e) => setRole(e.target.value as UserRole)}
           >
             {ROLES.map((r) => (
-              <option key={r.value} value={r.value}>
-                {r.label}
-              </option>
+              <option key={r.value} value={r.value}>{r.label}</option>
             ))}
           </select>
           <Button onClick={() => void handleCreate()}>Создать</Button>
@@ -203,10 +246,13 @@ export default function AdminUsersPage() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Input className="min-w-72 flex-1" placeholder="Поиск по логину или email" value={search} onChange={(e) => setSearch(e.target.value)} />
-        <Button variant="outline" onClick={() => void loadUsers(search)}>
-          Найти
-        </Button>
+        <Input
+          className="min-w-72 flex-1"
+          placeholder="Поиск по логину или email"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <Button variant="outline" onClick={() => void loadUsers(search)}>Найти</Button>
       </div>
 
       <div className="overflow-auto rounded-lg border">
@@ -233,9 +279,7 @@ export default function AdminUsersPage() {
                     onChange={(e) => void handleRoleChange(user, e.target.value as UserRole)}
                   >
                     {ROLES.map((r) => (
-                      <option key={r.value} value={r.value}>
-                        {r.label}
-                      </option>
+                      <option key={r.value} value={r.value}>{r.label}</option>
                     ))}
                   </select>
                 </td>
@@ -253,6 +297,15 @@ export default function AdminUsersPage() {
                     <Button variant="outline" size="sm" onClick={() => void handlePasswordChange(user)}>
                       Сменить пароль
                     </Button>
+                    {mode === "active" ? (
+                      <Button variant="secondary" size="sm" onClick={() => void handleDeactivate(user)}>
+                        Деактивировать
+                      </Button>
+                    ) : (
+                      <Button variant="default" size="sm" onClick={() => void handleRestore(user)}>
+                        Восстановить
+                      </Button>
+                    )}
                     <Button variant="destructive" size="sm" onClick={() => void handleDelete(user)}>
                       Удалить
                     </Button>

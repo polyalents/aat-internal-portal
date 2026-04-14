@@ -58,7 +58,7 @@ export async function getAdminUsers(params?: {
   page?: number
   size?: number
   search?: string
-  is_active?: boolean
+  is_active?: boolean | null
 }): Promise<PaginatedResponse<User>> {
   const { data } = await client.get<PaginatedResponse<User>>("/users/", { params })
   return data
@@ -71,6 +71,16 @@ export async function createAdminUser(payload: UserCreate): Promise<User> {
 
 export async function updateAdminUser(id: string, payload: UserUpdate): Promise<User> {
   const { data } = await client.patch<User>(`/users/${id}`, payload)
+  return data
+}
+
+export async function deactivateAdminUser(id: string): Promise<User> {
+  const { data } = await client.post<User>(`/users/${id}/deactivate`)
+  return data
+}
+
+export async function restoreAdminUser(id: string): Promise<User> {
+  const { data } = await client.post<User>(`/users/${id}/restore`)
   return data
 }
 
@@ -91,7 +101,7 @@ export async function getAdminEmployees(params?: {
   page?: number
   size?: number
   search?: string
-  is_active?: boolean
+  is_active?: boolean | null
 }): Promise<PaginatedResponse<Employee>> {
   const { data } = await client.get<PaginatedResponse<Employee>>("/employees/", { params })
   return data
@@ -107,6 +117,16 @@ export async function updateAdminEmployee(
   payload: EmployeeAdminUpdatePayload
 ): Promise<Employee> {
   const { data } = await client.patch<Employee>(`/employees/${id}`, payload)
+  return data
+}
+
+export async function deactivateAdminEmployee(id: string): Promise<Employee> {
+  const { data } = await client.post<Employee>(`/employees/${id}/deactivate`)
+  return data
+}
+
+export async function restoreAdminEmployee(id: string): Promise<Employee> {
+  const { data } = await client.post<Employee>(`/employees/${id}/restore`)
   return data
 }
 

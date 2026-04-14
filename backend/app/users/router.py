@@ -10,13 +10,24 @@ from app.users.schemas import UserCreate, UserListResponse, UserPasswordChange, 
 from app.users.service import (
     change_user_password,
     create_user,
+    deactivate_user,
     delete_user_permanently,
     get_user_by_id,
     get_users,
+    restore_user,
     update_user,
 )
 
 router = APIRouter()
+
+
+def _to_user_read(user: User) -> UserRead:
+    return UserRead.model_validate(
+        {
+            **user.__dict__,
+            "employee_id": user.employee.id if user.employee else None,
+        }
+    )
 
 
 @router.get("/", response_model=UserListResponse)
@@ -38,15 +49,7 @@ async def list_users(
         search=search,
     )
     return UserListResponse(
-        items=[
-            UserRead.model_validate(
-                {
-                    **user.__dict__,
-                    "employee_id": user.employee.id if user.employee else None,
-                }
-            )
-            for user in users
-        ],
+        items=[_to_user_read(user) for user in users],
         total=total,
         page=page,
         size=size,
@@ -62,12 +65,7 @@ async def read_user(
     user = await get_user_by_id(db, user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return UserRead.model_validate(
-        {
-            **user.__dict__,
-            "employee_id": user.employee.id if user.employee else None,
-        }
-    )
+    return _to_user_read(user)
 
 
 @router.post("/", response_model=UserRead, status_code=status.HTTP_201_CREATED)
@@ -81,12 +79,7 @@ async def create_new_user(
     reloaded = await get_user_by_id(db, user.id)
     if reloaded is None:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to reload user")
-    return UserRead.model_validate(
-        {
-            **reloaded.__dict__,
-            "employee_id": reloaded.employee.id if reloaded.employee else None,
-        }
-    )
+    return _to_user_read(reloaded)
 
 
 @router.patch("/{user_id}", response_model=UserRead)
@@ -106,12 +99,7 @@ async def update_existing_user(
     reloaded = await get_user_by_id(db, user.id)
     if reloaded is None:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to reload user")
-    return UserRead.model_validate(
-        {
-            **reloaded.__dict__,
-            "employee_id": reloaded.employee.id if reloaded.employee else None,
-        }
-    )
+    return _to_user_read(reloaded)
 
 
 @router.patch("/{user_id}/password", response_model=UserRead)
@@ -131,12 +119,45 @@ async def change_existing_user_password(
     reloaded = await get_user_by_id(db, user.id)
     if reloaded is None:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to reload user")
-    return UserRead.model_validate(
-        {
-            **reloaded.__dict__,
-            "employee_id": reloaded.employee.id if reloaded.employee else None,
-        }
-    )
+    return _to_user_read(reloaded)
+
+
+@router.post("/{user_id}/deactivate", response_model=UserRead)
+async def deactivate_existing_user(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> UserRead:
+    user = await get_user_by_id(db, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    user = await deactivate_user(db, user)
+    await db.commit()
+
+    reloaded = await get_user_by_id(db, user.id)
+    if reloaded is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to reload user")
+    return _to_user_read(reloaded)
+
+
+@router.post("/{user_id}/restore", response_model=UserRead)
+async def restore_existing_user(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> UserRead:
+    user = await get_user_by_id(db, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    user = await restore_user(db, user)
+    await db.commit()
+
+    reloaded = await get_user_by_id(db, user.id)
+    if reloaded is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to reload user")
+    return _to_user_read(reloaded)
 
 
 @router.delete("/{user_id}")

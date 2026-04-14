@@ -138,19 +138,41 @@ async def change_user_password(db: AsyncSession, user: User, data: UserPasswordC
     return user
 
 
+async def deactivate_user(db: AsyncSession, user: User) -> User:
+    user.is_active = False
+    user.is_it_manager = False
+
+    if user.employee is not None:
+        user.employee.is_active = False
+
+    await db.flush()
+    await db.refresh(user)
+    return user
+
+
+async def restore_user(db: AsyncSession, user: User) -> User:
+    user.is_active = True
+
+    if user.employee is not None:
+        user.employee.is_active = True
+
+    await db.flush()
+    await db.refresh(user)
+    return user
+
+
 async def delete_user_permanently(db: AsyncSession, user: User) -> None:
     if user.employee is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Cannot delete user while linked to an employee card",
+            detail="Нельзя удалить пользователя, пока он привязан к карточке сотрудника",
         )
 
     try:
         await db.delete(user)
         await db.flush()
     except IntegrityError as exc:
-        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Cannot delete user because it is referenced by related records",
+            detail="Нельзя удалить пользователя: есть связанные данные. Используйте деактивацию.",
         ) from exc
