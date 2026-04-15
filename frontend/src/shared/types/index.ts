@@ -50,6 +50,7 @@ export interface Department {
   id: string
   name: string
   head_id: string | null
+  parent_id: string | null
   created_at: string
 }
 
@@ -80,14 +81,22 @@ export interface Employee {
   updated_at: string
 }
 
-export interface OrgTreeNode {
+export interface OrgTreeEmployeeNode {
   id: string
   full_name: string
   position: string
-  department_name: string | null
   photo_url: string | null
   is_on_vacation: boolean
-  children: OrgTreeNode[]
+  children: OrgTreeEmployeeNode[]
+}
+
+export interface OrgTreeDepartmentNode {
+  id: string | null
+  name: string
+  head_id: string | null
+  head_name: string | null
+  employees_count: number
+  employees: OrgTreeEmployeeNode[]
 }
 
 export interface BirthdayEntry {

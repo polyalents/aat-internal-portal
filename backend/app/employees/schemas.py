@@ -115,14 +115,26 @@ class EmployeeListResponse(BaseModel):
     size: int
 
 
-class OrgTreeNode(BaseModel):
+class OrgTreeEmployeeNode(BaseModel):
     id: UUID
     full_name: str
     position: str
-    department_name: str | None = None
     photo_url: str | None = None
     is_on_vacation: bool = False
-    children: list["OrgTreeNode"] = Field(default_factory=list)
+    children: list["OrgTreeEmployeeNode"] = Field(default_factory=list)
+
+    model_config = {"from_attributes": True}
+
+
+class OrgTreeDepartmentNode(BaseModel):
+    id: UUID
+    name: str
+    head_id: UUID | None = None
+    head_name: str | None = None
+    employee_count: int = 0
+    children_count: int = 0
+    employees: list[OrgTreeEmployeeNode] = Field(default_factory=list)
+    children: list["OrgTreeDepartmentNode"] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 

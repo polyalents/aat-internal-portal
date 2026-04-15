@@ -1,8 +1,8 @@
 import client from "@/shared/api/client"
 import type {
-  Employee,
-  OrgTreeNode,
   BirthdayEntry,
+  Employee,
+  OrgTreeDepartmentNode,
   PaginatedResponse,
 } from "@/shared/types"
 
@@ -45,7 +45,7 @@ export async function updateEmployee(
   return data
 }
 
-export async function getOrgTree(): Promise<OrgTreeNode[]> {
+export async function getOrgTree(): Promise<OrgTreeDepartmentNode[]> {
   const { data } = await client.get("/employees/org-tree")
   return data
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import {
   AlertTriangle,
@@ -29,6 +29,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
 
   const { isIT } = useAuthStore()
+  const isItUser = isIT()
 
   useEffect(() => {
     const token = localStorage.getItem("access_token")
@@ -61,6 +62,68 @@ export default function DashboardPage() {
       })
   }, [])
 
+  const statCards = useMemo(() => {
+    if (!data) return []
+
+    const stats = data.ticket_stats
+
+    if (isItUser) {
+      return [
+        {
+          label: "Всего заявок",
+          value: stats.total,
+          color: "text-foreground",
+          to: "/tickets",
+        },
+        {
+          label: "Новых",
+          value: data.unassigned_tickets.length,
+          color: "text-blue-800 dark:text-blue-500",
+          to: "/tickets?scope=unassigned",
+        },
+        {
+          label: "В работе",
+          value: data.assigned_tickets.length,
+          color: "text-amber-800 dark:text-amber-500",
+          to: "/tickets?scope=assigned",
+        },
+        {
+          label: "Завершено",
+          value: stats.completed,
+          color: "text-emerald-800 dark:text-emerald-500",
+          to: "/tickets?scope=completed",
+        },
+      ]
+    }
+
+    return [
+      {
+        label: "Всего заявок",
+        value: stats.total,
+        color: "text-foreground",
+        to: "/tickets",
+      },
+      {
+        label: "Новых",
+        value: stats.new,
+        color: "text-blue-800 dark:text-blue-500",
+        to: "/tickets?scope=new",
+      },
+      {
+        label: "В работе",
+        value: stats.in_progress,
+        color: "text-amber-800 dark:text-amber-500",
+        to: "/tickets?scope=in_progress",
+      },
+      {
+        label: "Завершено",
+        value: stats.completed,
+        color: "text-emerald-800 dark:text-emerald-500",
+        to: "/tickets?scope=completed",
+      },
+    ]
+  }, [data, isItUser])
+
   if (loading) {
     return <div className="flex items-center justify-center py-12 text-muted-foreground">Загрузка...</div>
   }
@@ -69,20 +132,23 @@ export default function DashboardPage() {
     return <div className="py-12 text-center text-muted-foreground">Ошибка загрузки</div>
   }
 
-  const stats = data.ticket_stats
-
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Главная</h1>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <StatCard label="Всего заявок" value={stats.total} color="text-foreground" />
-        <StatCard label="Новых" value={stats.new} color="text-blue-800 dark:text-blue-500" />
-        <StatCard label="В работе" value={stats.in_progress} color="text-amber-800 dark:text-amber-500" />
-        <StatCard label="Завершено" value={stats.completed} color="text-emerald-800 dark:text-emerald-500" />
+        {statCards.map((card) => (
+          <StatCard
+            key={card.label}
+            label={card.label}
+            value={card.value}
+            color={card.color}
+            to={card.to}
+          />
+        ))}
       </div>
 
-      {isIT() && data.unassigned_tickets.length > 0 && (
+      {isItUser && data.unassigned_tickets.length > 0 && (
         <section className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm">
           <h2 className="flex items-center gap-2 font-semibold">
             <AlertTriangle className="h-4 w-4 text-orange-500 dark:text-orange-300" />
@@ -116,7 +182,7 @@ export default function DashboardPage() {
         </section>
       )}
 
-      {isIT() && data.assigned_tickets && data.assigned_tickets.length > 0 && (
+      {isItUser && data.assigned_tickets && data.assigned_tickets.length > 0 && (
         <section className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm">
           <h2 className="flex items-center gap-2 font-semibold">
             <Briefcase className="h-4 w-4 text-blue-500 dark:text-blue-300" />
@@ -154,7 +220,7 @@ export default function DashboardPage() {
         <section className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm">
           <h2 className="flex items-center gap-2 font-semibold">
             <Ticket className="h-4 w-4" />
-            {isIT() ? "Последние заявки" : "Мои заявки"}
+            {isItUser ? "Последние заявки" : "Мои заявки"}
           </h2>
 
           {data.recent_tickets.length === 0 ? (
@@ -323,15 +389,20 @@ function StatCard({
   label,
   value,
   color,
+  to,
 }: {
   label: string
   value: number
   color?: string
+  to: string
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+    <Link
+      to={to}
+      className="rounded-xl border border-border bg-card p-4 shadow-sm transition hover:bg-accent hover:shadow-md"
+    >
       <p className="text-sm text-muted-foreground">{label}</p>
       <p className={cn("text-2xl font-bold text-foreground", color)}>{value}</p>
-    </div>
+    </Link>
   )
-} 
+}

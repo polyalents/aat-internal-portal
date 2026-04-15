@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { isAxiosError } from "axios"
 import { useLocation, useSearchParams } from "react-router-dom"
 
@@ -26,7 +26,6 @@ interface EmployeeFormState {
   birth_date: string
   vacation_start: string
   vacation_end: string
-  manager_id: string
   department_id: string
   user_id: string
 }
@@ -43,7 +42,6 @@ const EMPTY_FORM: EmployeeFormState = {
   birth_date: "",
   vacation_start: "",
   vacation_end: "",
-  manager_id: "",
   department_id: "",
   user_id: "",
 }
@@ -61,7 +59,6 @@ function toForm(employee: Employee): EmployeeFormState {
     birth_date: employee.birth_date ?? "",
     vacation_start: employee.vacation_start ?? "",
     vacation_end: employee.vacation_end ?? "",
-    manager_id: employee.manager_id ?? "",
     department_id: employee.department_id ?? "",
     user_id: employee.user_id ?? "",
   }
@@ -80,7 +77,6 @@ function formToPayload(form: EmployeeFormState) {
     birth_date: form.birth_date || null,
     vacation_start: form.vacation_start || null,
     vacation_end: form.vacation_end || null,
-    manager_id: form.manager_id || null,
     department_id: form.department_id || null,
     user_id: form.user_id || null,
   }
@@ -98,12 +94,6 @@ function validateEmployeeForm(form: EmployeeFormState): string | null {
   }
   if (!form.email.trim()) {
     return "Заполните email"
-  }
-  if (!form.department_id) {
-    return "Выберите отдел"
-  }
-  if (!form.manager_id) {
-    return "Выберите руководителя"
   }
 
   return null
@@ -138,6 +128,7 @@ export default function AdminEmployeesPage() {
         getAdminUsers({ page: 1, size: 100, is_active: true }),
         getAdminDepartments(),
       ])
+
       setEmployees(employeesData.items)
       setUsers(usersData.items)
       setDepartments(departmentsData)
@@ -169,16 +160,9 @@ export default function AdminEmployeesPage() {
     setSearchParams(next, { replace: true })
   }, [searchParams, setSearchParams])
 
-  const managerOptions = useMemo(() => employees, [employees])
-
   function availableUsersForEmployee(employee: Employee | null): User[] {
     if (!employee) return users.filter((u) => !u.employee_id)
     return users.filter((u) => !u.employee_id || u.id === employee.user_id)
-  }
-
-  function managersForEmployee(employee: Employee | null): Employee[] {
-    if (!employee) return managerOptions
-    return managerOptions.filter((manager) => manager.id !== employee.id)
   }
 
   function handleCreateFormChange<K extends keyof EmployeeFormState>(
@@ -215,6 +199,12 @@ export default function AdminEmployeesPage() {
         setError("Конфликт привязки: выбранная учётная запись уже связана с другим сотрудником")
         return
       }
+
+      if (isAxiosError(err) && err.response?.status === 400) {
+        setError(String(err.response?.data?.detail || "Ошибка валидации данных"))
+        return
+      }
+
       setError("Не удалось создать карточку сотрудника")
     }
   }
@@ -241,11 +231,6 @@ export default function AdminEmployeesPage() {
       return
     }
 
-    if (employeeId === editForm.manager_id) {
-      setError("Сотрудник не может быть руководителем самого себя")
-      return
-    }
-
     try {
       await updateAdminEmployee(employeeId, formToPayload(editForm))
       setInfo("Карточка сотрудника обновлена")
@@ -256,10 +241,12 @@ export default function AdminEmployeesPage() {
         setError("Конфликт привязки: выбранная учётная запись уже связана с другим сотрудником")
         return
       }
+
       if (isAxiosError(err) && err.response?.status === 400) {
         setError(String(err.response?.data?.detail || "Ошибка валидации данных"))
         return
       }
+
       setError("Не удалось обновить карточку сотрудника")
     }
   }
@@ -267,6 +254,7 @@ export default function AdminEmployeesPage() {
   async function deleteEmployee(employee: Employee) {
     setError(null)
     setInfo(null)
+
     try {
       await deleteAdminEmployee(employee.id)
       setInfo(`Карточка сотрудника ${employee.full_name} удалена`)
@@ -281,6 +269,7 @@ export default function AdminEmployeesPage() {
         )
         return
       }
+
       setError("Не удалось удалить карточку сотрудника")
     }
   }
@@ -299,6 +288,7 @@ export default function AdminEmployeesPage() {
           {error}
         </div>
       )}
+
       {info && (
         <div className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-700">
           {info}
@@ -393,23 +383,10 @@ export default function AdminEmployeesPage() {
             value={createForm.department_id}
             onChange={(e) => handleCreateFormChange("department_id", e.target.value)}
           >
-            <option value="">Выберите отдел*</option>
+            <option value="">Отдел не выбран</option>
             {departments.map((department) => (
               <option key={department.id} value={department.id}>
                 {department.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            className="h-11 rounded-md border bg-background px-2.5 text-sm"
-            value={createForm.manager_id}
-            onChange={(e) => handleCreateFormChange("manager_id", e.target.value)}
-          >
-            <option value="">Выберите руководителя*</option>
-            {managersForEmployee(null).map((manager) => (
-              <option key={manager.id} value={manager.id}>
-                {manager.full_name}
               </option>
             ))}
           </select>
@@ -461,6 +438,12 @@ export default function AdminEmployeesPage() {
                     <h4 className="font-semibold">{employee.full_name}</h4>
                     <p className="text-sm text-muted-foreground">
                       {employee.position} · {employee.email}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Отдел: {employee.department_name || "не назначен"}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Руководитель: {employee.manager_name || "не назначен"}
                     </p>
                   </div>
 
@@ -602,24 +585,10 @@ export default function AdminEmployeesPage() {
                     value={currentForm.department_id}
                     onChange={(e) => handleEditFormChange("department_id", e.target.value)}
                   >
-                    <option value="">Выберите отдел*</option>
+                    <option value="">Отдел не выбран</option>
                     {departments.map((department) => (
                       <option key={department.id} value={department.id}>
                         {department.name}
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    disabled={!isEditing}
-                    className="h-11 rounded-md border bg-background px-2.5 text-sm"
-                    value={currentForm.manager_id}
-                    onChange={(e) => handleEditFormChange("manager_id", e.target.value)}
-                  >
-                    <option value="">Выберите руководителя*</option>
-                    {managersForEmployee(employee).map((manager) => (
-                      <option key={manager.id} value={manager.id}>
-                        {manager.full_name}
                       </option>
                     ))}
                   </select>

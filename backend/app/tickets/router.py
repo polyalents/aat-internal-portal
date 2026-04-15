@@ -134,6 +134,7 @@ async def list_tickets(
     unassigned_only: bool = Query(False),
     archived: bool = Query(False),
     assigned_to_me: bool = Query(False),
+    my_work_only: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> TicketListResponse:
@@ -156,6 +157,7 @@ async def list_tickets(
         search=search,
         unassigned_only=unassigned_only,
         archived=archived,
+        my_work_only=my_work_only,
     )
     items = [_ticket_to_read(ticket) for ticket in tickets]
     return TicketListResponse(items=items, total=total, page=page, size=size)

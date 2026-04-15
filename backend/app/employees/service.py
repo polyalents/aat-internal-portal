@@ -9,7 +9,13 @@ from sqlalchemy.orm import joinedload
 
 from app.departments.models import Department
 from app.employees.models import Employee
-from app.employees.schemas import BirthdayEntry, EmployeeCreate, EmployeeUpdate, OrgTreeNode
+from app.employees.schemas import (
+    BirthdayEntry,
+    EmployeeCreate,
+    EmployeeUpdate,
+    OrgTreeDepartmentNode,
+    OrgTreeEmployeeNode,
+)
 
 
 def _build_full_name(last_name: str | None, first_name: str | None, middle_name: str | None) -> str:
@@ -37,6 +43,28 @@ async def _ensure_user_binding_available(
         status_code=status.HTTP_409_CONFLICT,
         detail="Selected user is already bound to another employee",
     )
+
+
+async def _get_department_head_id(
+    db: AsyncSession,
+    department_id: UUID | None,
+    current_employee_id: UUID | None = None,
+) -> UUID | None:
+    if department_id is None:
+        return None
+
+    result = await db.execute(
+        select(Department.head_id).where(Department.id == department_id)
+    )
+    head_id = result.scalar_one_or_none()
+
+    if head_id is None:
+        return None
+
+    if current_employee_id is not None and head_id == current_employee_id:
+        return None
+
+    return head_id
 
 
 async def get_employees(
@@ -147,6 +175,11 @@ async def create_employee(db: AsyncSession, data: EmployeeCreate) -> Employee:
 
     await _ensure_user_binding_available(db, payload.get("user_id"))
 
+    payload["manager_id"] = await _get_department_head_id(
+        db,
+        payload.get("department_id"),
+    )
+
     employee = Employee(**payload)
     db.add(employee)
     await db.commit()
@@ -170,6 +203,19 @@ async def update_employee(db: AsyncSession, employee: Employee, data: EmployeeUp
 
     if "user_id" in update_data:
         await _ensure_user_binding_available(db, update_data["user_id"], employee.id)
+
+    if "department_id" in update_data:
+        update_data["manager_id"] = await _get_department_head_id(
+            db,
+            update_data["department_id"],
+            employee.id,
+        )
+    else:
+        update_data["manager_id"] = await _get_department_head_id(
+            db,
+            employee.department_id,
+            employee.id,
+        )
 
     for field, value in update_data.items():
         setattr(employee, field, value)
@@ -247,34 +293,96 @@ def _employee_to_read_dict(emp: Employee) -> dict:
     }
 
 
-async def get_org_tree(db: AsyncSession) -> list[OrgTreeNode]:
-    stmt = (
-        select(Employee)
-        .options(joinedload(Employee.department))
-        .where(Employee.is_active.is_(True))
-        .order_by(Employee.last_name, Employee.first_name)
-    )
-    result = await db.execute(stmt)
-    all_employees = list(result.scalars().unique().all())
-
+def _build_employee_tree(employees: list[Employee]) -> list[OrgTreeEmployeeNode]:
+    employees_by_id = {employee.id: employee for employee in employees}
     children_map: dict[UUID | None, list[Employee]] = {}
-    for employee in all_employees:
-        children_map.setdefault(employee.manager_id, []).append(employee)
 
-    def build_node(employee: Employee) -> OrgTreeNode:
-        children = children_map.get(employee.id, [])
-        return OrgTreeNode(
+    for employee in employees:
+        manager_id = employee.manager_id
+        if manager_id is not None and manager_id not in employees_by_id:
+            manager_id = None
+        children_map.setdefault(manager_id, []).append(employee)
+
+    for _, items in children_map.items():
+        items.sort(key=lambda item: (item.last_name.lower(), item.first_name.lower()))
+
+    def build_node(employee: Employee) -> OrgTreeEmployeeNode:
+        return OrgTreeEmployeeNode(
             id=employee.id,
             full_name=_build_full_name(employee.last_name, employee.first_name, employee.middle_name),
             position=employee.position,
-            department_name=employee.department.name if employee.department else None,
             photo_url=employee.photo_url,
             is_on_vacation=employee.is_on_vacation,
-            children=[build_node(child) for child in children],
+            children=[build_node(child) for child in children_map.get(employee.id, [])],
         )
 
     roots = children_map.get(None, [])
     return [build_node(root) for root in roots]
+
+
+async def get_org_tree(db: AsyncSession) -> list[OrgTreeDepartmentNode]:
+    dept_result = await db.execute(
+        select(Department)
+        .options(joinedload(Department.head))
+        .order_by(Department.name)
+    )
+    departments = list(dept_result.scalars().unique().all())
+
+    emp_result = await db.execute(
+        select(Employee)
+        .options(
+            joinedload(Employee.department),
+            joinedload(Employee.manager),
+        )
+        .where(Employee.is_active.is_(True))
+        .order_by(Employee.last_name, Employee.first_name)
+    )
+    employees = list(emp_result.scalars().unique().all())
+
+    departments_by_id = {department.id: department for department in departments}
+
+    department_children_map: dict[UUID | None, list[Department]] = {}
+    for department in departments:
+        parent_id = department.parent_id
+        if parent_id is not None and parent_id not in departments_by_id:
+            parent_id = None
+        department_children_map.setdefault(parent_id, []).append(department)
+
+    for _, items in department_children_map.items():
+        items.sort(key=lambda item: item.name.lower())
+
+    employees_by_department: dict[UUID, list[Employee]] = {}
+    for employee in employees:
+        if employee.department_id is None:
+            continue
+        employees_by_department.setdefault(employee.department_id, []).append(employee)
+
+    def build_department_node(department: Department) -> OrgTreeDepartmentNode:
+        department_employees = employees_by_department.get(department.id, [])
+        employee_tree = _build_employee_tree(department_employees)
+        child_departments = department_children_map.get(department.id, [])
+
+        head_name = None
+        if department.head is not None:
+            head_name = _build_full_name(
+                department.head.last_name,
+                department.head.first_name,
+                department.head.middle_name,
+            )
+
+        return OrgTreeDepartmentNode(
+            id=department.id,
+            name=department.name,
+            head_id=department.head_id,
+            head_name=head_name,
+            employee_count=len(department_employees),
+            children_count=len(child_departments),
+            employees=employee_tree,
+            children=[build_department_node(child) for child in child_departments],
+        )
+
+    roots = department_children_map.get(None, [])
+    return [build_department_node(root) for root in roots]
 
 
 async def get_birthdays(

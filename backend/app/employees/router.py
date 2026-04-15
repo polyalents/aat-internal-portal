@@ -13,7 +13,7 @@ from app.employees.schemas import (
     EmployeeListResponse,
     EmployeeRead,
     EmployeeUpdate,
-    OrgTreeNode,
+    OrgTreeDepartmentNode,
 )
 from app.employees.service import (
     _employee_to_read_dict,
@@ -77,11 +77,11 @@ async def list_employees(
     return EmployeeListResponse(items=items, total=total, page=page, size=size)
 
 
-@router.get("/org-tree", response_model=list[OrgTreeNode])
+@router.get("/org-tree", response_model=list[OrgTreeDepartmentNode])
 async def org_tree(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
-) -> list[OrgTreeNode]:
+) -> list[OrgTreeDepartmentNode]:
     return await get_org_tree(db)
 
 

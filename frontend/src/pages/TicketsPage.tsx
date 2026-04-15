@@ -44,7 +44,13 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
   rejected: <XCircle className="h-4 w-4" />,
 }
 
-type TicketScope = "all" | "unassigned" | "assigned"
+type TicketScope =
+  | "all"
+  | "unassigned"
+  | "assigned"
+  | "completed"
+  | "new"
+  | "in_progress"
 
 export default function TicketsPage() {
   const navigate = useNavigate()
@@ -64,7 +70,9 @@ export default function TicketsPage() {
   const [page, setPage] = useState(Number(searchParams.get("page")) || 1)
   const [archived, setArchived] = useState(searchParams.get("archived") === "true")
   const [cleanupLoading, setCleanupLoading] = useState(false)
-  const [scope, setScope] = useState((searchParams.get("scope") as TicketScope) || "all")
+
+  const initialScope = (searchParams.get("scope") as TicketScope) || "all"
+  const [scope, setScope] = useState<TicketScope>(initialScope)
 
   const fetchTickets = useCallback(async () => {
     setLoading(true)
@@ -79,13 +87,13 @@ export default function TicketsPage() {
         archived?: boolean
         unassigned_only?: boolean
         assigned_to_me?: boolean
+        my_work_only?: boolean
       } = {
         page,
         size: 20,
         archived,
       }
 
-      if (status) params.status = status
       if (search.trim()) params.search = search.trim()
 
       if (isIT) {
@@ -94,6 +102,21 @@ export default function TicketsPage() {
           params.unassigned_only = true
         } else if (scope === "assigned") {
           params.assigned_to_me = true
+          params.my_work_only = true
+        } else if (scope === "completed") {
+          params.status = "completed"
+        } else if (status) {
+          params.status = status
+        }
+      } else {
+        if (scope === "new") {
+          params.status = "new"
+        } else if (scope === "in_progress") {
+          params.status = "in_progress"
+        } else if (scope === "completed") {
+          params.status = "completed"
+        } else if (status) {
+          params.status = status
         }
       }
 
@@ -115,14 +138,17 @@ export default function TicketsPage() {
   useEffect(() => {
     const params: Record<string, string> = {}
 
-    if (status) params.status = status
     if (search) params.search = search
     if (page > 1) params.page = String(page)
     if (archived) params.archived = "true"
-    if (isIT && scope !== "all") params.scope = scope
+    if (scope !== "all") {
+      params.scope = scope
+    } else if (status) {
+      params.status = status
+    }
 
     setSearchParams(params, { replace: true })
-  }, [status, search, page, archived, scope, isIT, setSearchParams])
+  }, [status, search, page, archived, scope, setSearchParams])
 
   async function handleCleanup() {
     if (!confirm("Удалить старые архивные заявки из базы?")) return
@@ -142,28 +168,39 @@ export default function TicketsPage() {
 
   const totalPages = Math.ceil(total / 20)
 
+  const pageTitle = archived
+    ? "Архив заявок"
+    : isIT
+      ? scope === "assigned"
+        ? "Мои заявки, принятые в работу"
+        : scope === "unassigned"
+          ? "Новые заявки без исполнителя"
+          : scope === "completed"
+            ? "Завершённые заявки"
+            : "Все заявки системы"
+      : scope === "new"
+        ? "Мои новые заявки"
+        : scope === "in_progress"
+          ? "Мои заявки в работе"
+          : scope === "completed"
+            ? "Мои завершённые заявки"
+            : "Мои заявки"
+
   return (
     <div className="space-y-6 overflow-x-hidden">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Заявки</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {archived
-              ? "Архив заявок"
-              : isIT
-                ? scope === "assigned"
-                  ? "Мои заявки, принятые в работу"
-                  : scope === "unassigned"
-                    ? "Новые заявки без исполнителя"
-                    : "Все заявки системы"
-                : "Мои заявки"}
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{pageTitle}</p>
         </div>
 
         <div className="flex flex-wrap gap-2">
           {isIT && (
             <button
-              onClick={() => setArchived((v) => !v)}
+              onClick={() => {
+                setArchived((v) => !v)
+                setPage(1)
+              }}
               className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-foreground shadow-sm transition hover:bg-accent sm:w-auto"
             >
               <Archive className="h-4 w-4" />
@@ -191,56 +228,153 @@ export default function TicketsPage() {
         </div>
       </div>
 
-      {isIT && !archived && (
+      {!archived && (
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setScope("all")
-              setPage(1)
-            }}
-            className={cn(
-              "rounded-xl border px-4 py-2 text-sm transition",
-              scope === "all"
-                ? "border-transparent bg-zinc-900 text-white shadow-sm dark:border-border dark:bg-accent dark:text-accent-foreground"
-                : "border-border bg-card text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground"
-            )}
-          >
-            Все заявки
-          </button>
+          {isIT ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setScope("all")
+                  setStatus("")
+                  setPage(1)
+                }}
+                className={cn(
+                  "rounded-xl border px-4 py-2 text-sm transition",
+                  scope === "all"
+                    ? "border-transparent bg-zinc-900 text-white shadow-sm dark:border-border dark:bg-accent dark:text-accent-foreground"
+                    : "border-border bg-card text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground"
+                )}
+              >
+                Все заявки
+              </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setScope("unassigned")
-              setPage(1)
-            }}
-            className={cn(
-              "rounded-xl border px-4 py-2 text-sm transition",
-              scope === "unassigned"
-                ? "border-foreground/10 bg-foreground text-background shadow-sm dark:border-border dark:bg-accent dark:text-accent-foreground"
-                : "border-border bg-card text-foreground/80 shadow-sm hover:bg-accent hover:text-accent-foreground"
-            )}
-          >
-            Без исполнителя
-          </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setScope("unassigned")
+                  setStatus("")
+                  setPage(1)
+                }}
+                className={cn(
+                  "rounded-xl border px-4 py-2 text-sm transition",
+                  scope === "unassigned"
+                    ? "border-foreground/10 bg-foreground text-background shadow-sm dark:border-border dark:bg-accent dark:text-accent-foreground"
+                    : "border-border bg-card text-foreground/80 shadow-sm hover:bg-accent hover:text-accent-foreground"
+                )}
+              >
+                Без исполнителя
+              </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setScope("assigned")
-              setPage(1)
-            }}
-            className={cn(
-              "inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm transition",
-              scope === "assigned"
-                ? "border-foreground/10 bg-foreground text-background shadow-sm dark:border-border dark:bg-accent dark:text-accent-foreground"
-                : "border-border bg-card text-foreground/80 shadow-sm hover:bg-accent hover:text-accent-foreground"
-            )}
-          >
-            <Briefcase className="h-4 w-4" />
-            Мои принятые
-          </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setScope("assigned")
+                  setStatus("")
+                  setPage(1)
+                }}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm transition",
+                  scope === "assigned"
+                    ? "border-foreground/10 bg-foreground text-background shadow-sm dark:border-border dark:bg-accent dark:text-accent-foreground"
+                    : "border-border bg-card text-foreground/80 shadow-sm hover:bg-accent hover:text-accent-foreground"
+                )}
+              >
+                <Briefcase className="h-4 w-4" />
+                Мои принятые
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setScope("completed")
+                  setStatus("")
+                  setPage(1)
+                }}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm transition",
+                  scope === "completed"
+                    ? "border-foreground/10 bg-foreground text-background shadow-sm dark:border-border dark:bg-accent dark:text-accent-foreground"
+                    : "border-border bg-card text-foreground/80 shadow-sm hover:bg-accent hover:text-accent-foreground"
+                )}
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Завершённые
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setScope("all")
+                  setStatus("")
+                  setPage(1)
+                }}
+                className={cn(
+                  "rounded-xl border px-4 py-2 text-sm transition",
+                  scope === "all"
+                    ? "border-transparent bg-zinc-900 text-white shadow-sm dark:border-border dark:bg-accent dark:text-accent-foreground"
+                    : "border-border bg-card text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground"
+                )}
+              >
+                Все заявки
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setScope("new")
+                  setStatus("")
+                  setPage(1)
+                }}
+                className={cn(
+                  "rounded-xl border px-4 py-2 text-sm transition",
+                  scope === "new"
+                    ? "border-foreground/10 bg-foreground text-background shadow-sm dark:border-border dark:bg-accent dark:text-accent-foreground"
+                    : "border-border bg-card text-foreground/80 shadow-sm hover:bg-accent hover:text-accent-foreground"
+                )}
+              >
+                Новые
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setScope("in_progress")
+                  setStatus("")
+                  setPage(1)
+                }}
+                className={cn(
+                  "inline-flex items-center gap-2 whitespace-nowrap rounded-xl border px-4 py-2 text-sm transition",
+                  scope === "in_progress"
+                    ? "border-foreground/10 bg-foreground text-background shadow-sm dark:border-border dark:bg-accent dark:text-accent-foreground"
+                    : "border-border bg-card text-foreground/80 shadow-sm hover:bg-accent hover:text-accent-foreground"
+                )}
+              >
+                <Briefcase className="h-4 w-4 shrink-0" />
+                <span>В работе</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setScope("completed")
+                  setStatus("")
+                  setPage(1)
+                }}
+                className={cn(
+                  "inline-flex items-center gap-2 whitespace-nowrap rounded-xl border px-4 py-2 text-sm transition",
+                  scope === "completed"
+                    ? "border-foreground/10 bg-foreground text-background shadow-sm dark:border-border dark:bg-accent dark:text-accent-foreground"
+                    : "border-border bg-card text-foreground/80 shadow-sm hover:bg-accent hover:text-accent-foreground"
+                )}
+              >
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                <span>Завершённые</span>
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -260,11 +394,12 @@ export default function TicketsPage() {
 
         <select
           value={status}
+          disabled={scope !== "all"}
           onChange={(e) => {
             setStatus(e.target.value)
             setPage(1)
           }}
-          className="w-full rounded-xl border border-input bg-card px-4 py-2 text-foreground shadow-sm outline-none transition focus:border-ring sm:w-auto"
+          className="w-full rounded-xl border border-input bg-card px-4 py-2 text-foreground shadow-sm outline-none transition focus:border-ring disabled:opacity-60 sm:w-auto"
         >
           {STATUS_FILTER_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
