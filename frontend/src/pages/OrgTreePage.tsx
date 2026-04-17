@@ -123,6 +123,11 @@ function shortName(e: EmployeeDto | null | undefined): string {
   return [e.first_name, e.last_name].filter(Boolean).join(" ").trim()
 }
 
+function normalizeParentId(parentId: string | null | undefined): string | null {
+  const normalized = parentId?.trim()
+  return normalized ? normalized : null
+}
+
 function isOnVacation(e: EmployeeDto): boolean {
   if (!e.vacation_start || !e.vacation_end) return false
   const now = new Date()
@@ -160,45 +165,70 @@ function countTree(nodes: TreeEmployee[]): number {
 function buildViews(depts: DepartmentDto[], emps: EmployeeDto[], query: string): DeptView[] {
   const q = query.trim().toLowerCase()
   const childCountMap = new Map<string, number>()
+  const parentMap = new Map<string, string | null>()
 
   for (const d of depts) {
-    if (d.parent_id) childCountMap.set(d.parent_id, (childCountMap.get(d.parent_id) ?? 0) + 1)
+    const parentId = normalizeParentId(d.parent_id)
+    parentMap.set(d.id, parentId)
+    if (parentId) childCountMap.set(parentId, (childCountMap.get(parentId) ?? 0) + 1)
   }
 
-  type Internal = DeptView & { visible: boolean }
+  type Internal = DeptView & { matched: boolean }
 
-  return depts
-    .map((dept): Internal => {
-      const deptEmployees = emps.filter((e) => e.department_id === dept.id)
-      const head = dept.head_id ? deptEmployees.find((e) => e.id === dept.head_id) ?? null : null
-      const tree = buildEmpTree(deptEmployees)
-      const filteredTree = q
-        ? (tree.map((n) => filterEmpTree(n, q)).filter(Boolean) as TreeEmployee[])
-        : tree
-      const deptMatched = iq(dept.name, q) || iq(fullName(head), q)
-      const hasEmployeeMatch = filteredTree.length > 0
+  const prepared = depts.map((dept): Internal => {
+    const deptEmployees = emps.filter((e) => e.department_id === dept.id)
+    const head = dept.head_id ? deptEmployees.find((e) => e.id === dept.head_id) ?? null : null
+    const tree = buildEmpTree(deptEmployees)
+    const filteredTree = q
+      ? (tree.map((n) => filterEmpTree(n, q)).filter(Boolean) as TreeEmployee[])
+      : tree
+    const deptMatched = iq(dept.name, q) || iq(fullName(head), q)
+    const hasEmployeeMatch = filteredTree.length > 0
+    const matched = q ? deptMatched || hasEmployeeMatch : true
 
-      return {
-        id: dept.id,
-        name: dept.name,
-        description: dept.description ?? null,
-        head,
-        headId: dept.head_id,
-        parentId: dept.parent_id,
-        employees: deptEmployees,
-        tree: q ? (deptMatched && filteredTree.length === 0 ? tree : filteredTree) : tree,
-        empCount: q
-          ? deptMatched && filteredTree.length === 0
-            ? deptEmployees.length
-            : countTree(filteredTree)
-          : deptEmployees.length,
-        childCount: childCountMap.get(dept.id) ?? 0,
-        visible: q ? deptMatched || hasEmployeeMatch : true,
-      }
+    return {
+      id: dept.id,
+      name: dept.name,
+      description: dept.description ?? null,
+      head,
+      headId: dept.head_id,
+      parentId: normalizeParentId(dept.parent_id),
+      employees: deptEmployees,
+      tree: q ? (deptMatched && filteredTree.length === 0 ? tree : filteredTree) : tree,
+      empCount: q
+        ? deptMatched && filteredTree.length === 0
+          ? deptEmployees.length
+          : countTree(filteredTree)
+        : deptEmployees.length,
+      childCount: childCountMap.get(dept.id) ?? 0,
+      matched,
+    }
+  })
+
+  if (!q) {
+    return prepared.map(({ matched, ...dept }) => {
+      void matched
+      return dept
     })
-    .filter((dept) => dept.visible)
-    .map(({ visible, ...dept }) => {
-      void visible
+  }
+
+  const visibleIds = new Set<string>()
+
+  for (const dept of prepared) {
+    if (!dept.matched) continue
+
+    let currentId: string | null = dept.id
+    while (currentId) {
+      if (visibleIds.has(currentId)) break
+      visibleIds.add(currentId)
+      currentId = parentMap.get(currentId) ?? null
+    }
+  }
+
+  return prepared
+    .filter((dept) => visibleIds.has(dept.id))
+    .map(({ matched, ...dept }) => {
+      void matched
       return dept
     })
 }
@@ -206,10 +236,11 @@ function buildViews(depts: DepartmentDto[], emps: EmployeeDto[], query: string):
 function collectDescendantIds(depts: DepartmentDto[], rootId: string): Set<string> {
   const childMap = new Map<string, string[]>()
   for (const dept of depts) {
-    if (!dept.parent_id) continue
-    const list = childMap.get(dept.parent_id) ?? []
+    const parentId = normalizeParentId(dept.parent_id)
+    if (!parentId) continue
+    const list = childMap.get(parentId) ?? []
     list.push(dept.id)
-    childMap.set(dept.parent_id, list)
+    childMap.set(parentId, list)
   }
 
   const result = new Set<string>()
@@ -321,17 +352,16 @@ const GAP_Y = 86
 
 type LayoutNode = { id: string; children: LayoutNode[]; width: number; x: number; y: number }
 
-function buildLayoutForest(views: DeptView[], parentId: string | null): LayoutNode[] {
-  return views
-    .filter((dept) => dept.parentId === parentId)
-    .sort((a, b) => a.name.localeCompare(b.name, "ru"))
-    .map((dept) => ({
-      id: dept.id,
-      children: buildLayoutForest(views, dept.id),
-      width: 0,
-      x: 0,
-      y: 0,
-    }))
+function buildLayoutBranch(childrenByParent: Map<string | null, DeptView[]>, parentId: string | null): LayoutNode[] {
+  const children = [...(childrenByParent.get(parentId) ?? [])].sort((a, b) => a.name.localeCompare(b.name, "ru"))
+
+  return children.map((dept) => ({
+    id: dept.id,
+    children: buildLayoutBranch(childrenByParent, dept.id),
+    width: 0,
+    x: 0,
+    y: 0,
+  }))
 }
 
 function measureSubtree(node: LayoutNode): number {
@@ -372,9 +402,17 @@ function layoutTree(
 ): { nodes: FlowNode[]; edges: Edge[] } {
   const viewMap = new Map(views.map((v) => [v.id, v]))
   const visibleIds = new Set(views.map((d) => d.id))
+  const childrenByParent = new Map<string | null, DeptView[]>()
 
-  const roots = buildLayoutForest(views, null)
+  for (const dept of views) {
+    const rawParentId = normalizeParentId(dept.parentId)
+    const effectiveParentId = rawParentId && visibleIds.has(rawParentId) ? rawParentId : null
+    const list = childrenByParent.get(effectiveParentId) ?? []
+    list.push(dept)
+    childrenByParent.set(effectiveParentId, list)
+  }
 
+  const roots = buildLayoutBranch(childrenByParent, null)
   const treeRoots = roots.filter((r) => r.children.length > 0)
   const soloRoots = roots.filter((r) => r.children.length === 0)
   let treeAreaWidth = 0
@@ -395,7 +433,6 @@ function layoutTree(
     node.x = soloStartX + col * (DEPT_W + GAP_X)
     node.y = row * (DEPT_H + GAP_Y)
   })
-
 
   const positions: Array<{ id: string; x: number; y: number }> = []
   roots.forEach((root) => flattenSubtree(root, positions))
@@ -441,17 +478,18 @@ function layoutTree(
       draggable: false,
     })
 
-    if (dept.parentId && visibleIds.has(dept.parentId)) {
+    const parentId = normalizeParentId(dept.parentId)
+    if (parentId && visibleIds.has(parentId)) {
       edges.push({
         id: `e-${dept.id}`,
-        source: `dept-${dept.parentId}`,
+        source: `dept-${parentId}`,
         target: nodeId,
         type: "step",
         sourceHandle: "out",
         targetHandle: "in",
         style: { stroke: "var(--org-edge)", strokeWidth: 2 },
       })
-    } else if (!dept.parentId) {
+    } else {
       edges.push({
         id: `e-${dept.id}`,
         source: rootId,
@@ -463,6 +501,26 @@ function layoutTree(
       })
     }
   }
+
+  console.log(
+    "LAYOUT views",
+    views.map((v) => ({
+      id: v.id,
+      name: v.name,
+      parentId: v.parentId,
+    }))
+  )
+
+  console.log(
+    "LAYOUT nodes",
+    nodes.map((n) => ({
+      id: n.id,
+      type: n.type,
+      position: n.position,
+    }))
+  )
+
+  console.log("LAYOUT edges", edges)
 
   return { nodes, edges }
 }
@@ -517,6 +575,8 @@ function RootNode({ data }: NodeProps<RootNodeData>) {
 }
 
 function DeptNode({ data }: NodeProps<DeptNodeData>) {
+  console.log("RENDER DeptNode", data.dept.id, data.dept.name)
+
   const { dept, selected, isAdmin, onSelect, onAddChild } = data
   const headLabel = shortName(dept.head)
 
@@ -1168,6 +1228,7 @@ function OrgTreeInner() {
         ...d,
         description: d.description ?? localMeta[d.id]?.description ?? null,
         head_id: d.head_id ?? localMeta[d.id]?.head_id ?? null,
+        parent_id: normalizeParentId(d.parent_id),
       }))
       setRawDepts(normalized)
       setRawEmps(employees)
@@ -1192,7 +1253,7 @@ function OrgTreeInner() {
     [rawDepts, selectedDept]
   )
   const selectedDeptChildren = useMemo(
-    () => (selectedDept ? rawDepts.filter((d) => d.parent_id === selectedDept.id).sort((a, b) => a.name.localeCompare(b.name, "ru")) : []),
+    () => (selectedDept ? rawDepts.filter((d) => normalizeParentId(d.parent_id) === selectedDept.id).sort((a, b) => a.name.localeCompare(b.name, "ru")) : []),
     [rawDepts, selectedDept]
   )
   const employeeModalTargetDept = useMemo(
@@ -1281,6 +1342,18 @@ function OrgTreeInner() {
   const graph = useMemo(() => {
     const { nodes, edges } = layoutTree(views, isAdmin, setSelectedId, openCreate)
 
+    console.log(
+      "GRAPH nodes raw",
+      nodes.map((n) => ({
+        id: n.id,
+        type: n.type,
+        position: n.position,
+        data: n.type === "deptNode" ? (n.data as DeptNodeData).dept.name : "root",
+      }))
+    )
+
+    console.log("GRAPH edges raw", edges)
+
     return {
       nodes: nodes.map((n) => {
         if (n.type !== "deptNode") return n
@@ -1364,6 +1437,9 @@ function OrgTreeInner() {
               panOnDrag
               fitView={false}
               defaultEdgeOptions={{ type: "step", animated: false }}
+              onError={(code, message) => {
+                console.error("REACTFLOW ERROR", code, message)
+              }}
             >
               <Background gap={26} size={1} color="hsl(var(--border) / 0.30)" />
               <Controls showInteractive={false} position="bottom-left" />

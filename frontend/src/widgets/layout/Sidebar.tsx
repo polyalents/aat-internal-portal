@@ -34,6 +34,38 @@ const NAV_ITEMS = [
 
 const BOTTOM_ITEMS = [{ to: "/profile", icon: UserCircle, label: "Профиль" }]
 
+function Logo() {
+  return (
+    <>
+      {/* Dark theme */}
+      <div className="hidden items-center gap-2.5 dark:flex">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" className="h-8 w-8 shrink-0">
+          <rect width="64" height="64" rx="16" fill="#0B0B0F" />
+          <text x="50%" y="52%" textAnchor="middle" dominantBaseline="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="24" fontWeight="800" letterSpacing="0.5">
+            <tspan fill="#A78BFA">A</tspan><tspan fill="#60A5FA">P</tspan>
+          </text>
+        </svg>
+        <span className="text-base font-semibold tracking-tight text-sidebar-foreground">
+          AAT Portal
+        </span>
+      </div>
+
+      {/* Light theme */}
+      <div className="flex items-center gap-2.5 dark:hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" className="h-8 w-8 shrink-0">
+          <rect width="64" height="64" rx="16" fill="#2D2B3D" />
+          <text x="50%" y="52%" textAnchor="middle" dominantBaseline="middle" fontFamily="Arial, Helvetica, sans-serif" fontSize="24" fontWeight="800" letterSpacing="0.5">
+            <tspan fill="#A78BFA">A</tspan><tspan fill="#60A5FA">P</tspan>
+          </text>
+        </svg>
+        <span className="text-base font-semibold tracking-tight text-sidebar-foreground">
+          AAT Portal
+        </span>
+      </div>
+    </>
+  )
+}
+
 export function Sidebar({ open, onClose }: SidebarProps) {
   const location = useLocation()
   const { isIT, hasRole } = useAuthStore()
@@ -49,8 +81,8 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         )}
       >
         <div className="flex h-14 items-center justify-between border-b border-sidebar-border px-4">
-          <Link to="/" className="text-lg font-semibold" onClick={onClose}>
-            AAT Portal
+          <Link to="/" onClick={onClose} className="min-w-0">
+            <Logo />
           </Link>
 
           <button
