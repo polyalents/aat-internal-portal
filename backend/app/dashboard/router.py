@@ -116,34 +116,30 @@ async def get_dashboard(
     assigned_tickets: list[TicketRead] = []
 
     if is_it:
-        new_ticket_rows, _ = await get_tickets(
+        all_open_tickets, _ = await get_tickets(
             db,
             page=1,
-            size=10,
-            status=TicketStatus.new,
+            size=100,
         )
+
         unassigned_tickets = [
             _ticket_to_read(ticket)
-            for ticket in new_ticket_rows
+            for ticket in all_open_tickets
             if ticket.assignee_id is None
+            and ticket.status not in (TicketStatus.completed, TicketStatus.rejected)
         ]
 
-        urgent_ticket_rows, _ = await get_tickets(
-            db,
-            page=1,
-            size=10,
-            priority=TicketPriority.now,
-        )
         urgent_tickets = [
             _ticket_to_read(ticket)
-            for ticket in urgent_ticket_rows
-            if ticket.status not in (TicketStatus.completed, TicketStatus.rejected)
+            for ticket in all_open_tickets
+            if ticket.priority == TicketPriority.now
+            and ticket.status not in (TicketStatus.completed, TicketStatus.rejected)
         ]
 
         assigned_ticket_rows, _ = await get_tickets(
             db,
             page=1,
-            size=10,
+            size=50,
             assignee_id=current_user.id,
         )
         assigned_tickets = [

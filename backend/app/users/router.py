@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import require_admin
+from app.tasks.celery_app import celery_app
 from app.users.models import User, UserRole
 from app.users.schemas import UserCreate, UserListResponse, UserPasswordChange, UserRead, UserUpdate
 from app.users.service import (
@@ -74,11 +75,29 @@ async def create_new_user(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> UserRead:
+    raw_password = body.password
+
     user = await create_user(db, body)
     await db.commit()
+
     reloaded = await get_user_by_id(db, user.id)
     if reloaded is None:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to reload user")
+
+    try:
+        full_name = reloaded.employee.full_name if reloaded.employee else reloaded.username
+        celery_app.send_task(
+            "app.tasks.ticket_tasks.notify_user_credentials",
+            args=[
+                reloaded.email,
+                full_name,
+                reloaded.username,
+                raw_password,
+            ],
+        )
+    except Exception:
+        pass
+
     return _to_user_read(reloaded)
 
 
