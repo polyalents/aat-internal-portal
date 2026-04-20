@@ -259,3 +259,43 @@ def build_welcome_email(
     </p>
     """
     return _wrap_email("Доступ к внутреннему порталу", body)
+
+def build_unread_chat_email(
+    recipient_name: str,
+    sender_name: str,
+    chat_title: str,
+    message_text: str | None,
+    portal_url: str,
+    chat_id: str,
+) -> str:
+    preview = _safe(message_text)
+    body = f"""
+    <p style="margin-top:0;">Здравствуйте, {_safe(recipient_name)}.</p>
+
+    <p>
+      У вас есть непрочитанное сообщение в чате внутреннего портала.
+    </p>
+
+    <table cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
+      <tr>
+        <td style="padding:7px 0;width:190px;"><b>Чат:</b></td>
+        <td style="padding:7px 0;">{_safe(chat_title)}</td>
+      </tr>
+      <tr>
+        <td style="padding:7px 0;"><b>Отправитель:</b></td>
+        <td style="padding:7px 0;">{_safe(sender_name)}</td>
+      </tr>
+      <tr>
+        <td style="padding:7px 0;vertical-align:top;"><b>Сообщение:</b></td>
+        <td style="padding:7px 0;">{preview}</td>
+      </tr>
+    </table>
+
+    <p style="margin:22px 0 0;">
+      <a href="{escape(portal_url)}/chat"
+         style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:11px 18px;border-radius:9px;font-weight:600;">
+         Открыть чат
+      </a>
+    </p>
+    """
+    return _wrap_email("Непрочитанное сообщение в чате", body)

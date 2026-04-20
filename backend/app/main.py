@@ -2,6 +2,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRoute
@@ -11,6 +12,10 @@ from app.config import settings
 from app.exceptions import register_exception_handlers
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
+from app.tasks.chat_tasks import process_unread_chat_notifications
+
+scheduler = AsyncIOScheduler()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -24,7 +29,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             print(f"{methods:20} {route.path}")
     print("=========================\n")
 
-    yield
+    scheduler.add_job(
+        process_unread_chat_notifications,
+        trigger="interval",
+        minutes=1,
+        id="process_unread_chat_notifications",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    scheduler.start()
+
+    try:
+        yield
+    finally:
+        scheduler.shutdown()
 
 
 def create_app() -> FastAPI:

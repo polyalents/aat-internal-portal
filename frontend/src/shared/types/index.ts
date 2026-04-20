@@ -243,14 +243,55 @@ export interface KnowledgeArticle {
 }
 
 // === Chat ===
+export type ChatType = "global" | "direct"
+export type ChatAttachmentType = "image" | "document"
+
+export interface ChatParticipant {
+  user_id: string
+  name: string | null
+  email: string | null
+}
+
+export interface Chat {
+  id: string
+  type: ChatType
+  title: string
+  participants: ChatParticipant[]
+  unread_count: number
+  last_message_preview: string | null
+  last_message_at: string | null
+  is_pinned: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ChatAttachment {
+  id: string
+  filename: string
+  file_path: string
+  file_url: string
+  file_size: number
+  content_type: string
+  attachment_type: ChatAttachmentType
+  uploaded_at: string
+}
+
+export interface ChatMessageStatus {
+  delivered_at: string | null
+  read_at: string | null
+}
+
 export interface ChatMessage {
   id: string
+  chat_id: string
   author_id: string
   author_name: string | null
   text: string
   is_pinned: boolean
   created_at: string
   is_deleted: boolean
+  attachments: ChatAttachment[]
+  my_status: ChatMessageStatus | null
 }
 
 // === Dashboard ===
