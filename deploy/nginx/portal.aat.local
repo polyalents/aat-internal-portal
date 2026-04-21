@@ -13,28 +13,33 @@ server {
 
     ssl_certificate     /etc/nginx/ssl/portal.aat.local.crt;
     ssl_certificate_key /etc/nginx/ssl/portal.aat.local.key;
-    ssl_protocols       TLSv1.2 TLSv1.3;
-    ssl_ciphers         HIGH:!aNULL:!MD5;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
     ssl_session_timeout 1d;
-    ssl_session_cache   shared:SSL:20m;
+    ssl_session_cache shared:SSL:20m;
     ssl_session_tickets off;
 
-    # Включать только после проверки стабильного HTTPS на всех клиентах
+    # включишь потом
     # add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
     root /var/www/portal;
     index index.html;
+
     client_max_body_size 12m;
 
     add_header X-Frame-Options "DENY" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=(), usb=(), browsing-topics=()" always;
-    add_header Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://portal.aat.local; font-src 'self' data:; connect-src 'self' https://portal.aat.local; worker-src 'self' blob:;" always;
+
+    add_header Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://portal.aat.local; font-src 'self' data:; connect-src 'self' https://portal.aat.local ws://portal.aat.local wss://portal.aat.local; worker-src 'self' blob:;" always;
 
     location /api/ {
         proxy_pass http://127.0.0.1:8000/api/;
+
         proxy_http_version 1.1;
+        proxy_set_header Connection "";
 
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -51,8 +56,10 @@ server {
     location ^~ /uploads/photos/ {
         alias /home/admin865/aat-internal-portal/backend/uploads/photos/;
         try_files $uri =404;
+
         access_log off;
         expires 7d;
+
         add_header Cache-Control "public, max-age=604800" always;
         add_header X-Content-Type-Options "nosniff" always;
     }
@@ -60,10 +67,13 @@ server {
     location ^~ /uploads/tickets/ {
         alias /home/admin865/aat-internal-portal/backend/uploads/tickets/;
         try_files $uri =404;
+
         access_log off;
         expires 7d;
+
         default_type application/octet-stream;
         types { }
+
         add_header Content-Disposition "attachment" always;
         add_header Cache-Control "private, no-transform" always;
         add_header X-Content-Type-Options "nosniff" always;

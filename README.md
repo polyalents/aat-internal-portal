@@ -2,9 +2,57 @@
 
 Internal corporate portal for employees and IT support.
 
-## Current stack
+Full-stack application developed from scratch. Covers internal processes, support workflows and basic automation.
 
-### Backend
+## What I did
+
+- full-stack development (frontend + backend)
+- backend development using FastAPI (API and business logic)
+- authentication system (JWT, refresh tokens, rotation, reuse detection)
+- database design and migrations (PostgreSQL, Alembic)
+- background tasks and notifications (Celery + Redis)
+- frontend development using React (Vite)
+- nginx configuration and reverse proxy setup
+- deployment on VPS (Docker, systemd)
+- basic monitoring and health checks
+- security configuration (CSP, headers, CORS, upload restrictions)
+
+## Features
+
+- authentication and sessions
+- user profiles
+
+- employees / org tree
+  - employee cards
+  - departments management
+
+- IT support system
+  - ticket creation and tracking
+  - status management
+  - notifications on updates
+
+- internal chat system
+  - direct messages (private chat)
+  - delayed notifications for unread messages (>10 min)
+  - department chats (planned)
+  - cross-department group chats (planned)
+
+- notifications
+  - user registration notifications
+  - ticket notifications
+  - chat message notifications
+
+- admin panel
+  - user accounts creation
+  - employee cards management
+  - departments management
+
+- announcements
+- knowledge base
+
+## Tech stack
+
+Backend:
 - FastAPI
 - SQLAlchemy
 - Alembic
@@ -12,135 +60,92 @@ Internal corporate portal for employees and IT support.
 - Redis
 - PostgreSQL
 
-### Frontend
+Frontend:
 - React
 - Vite
 
-### Infra
+Infrastructure:
+- Docker
+- Docker Compose
 - Nginx
 - systemd
-- Docker / Docker Compose
-
-## Main modules
-
-- authentication
-- user profile
-- employees and org tree
-- IT support tickets
-- announcements
-- knowledge base
-- internal chat
-- admin settings
 
 ## Project structure
 
-- `backend/` — backend application
-- `frontend/` — frontend application
-- `deploy/` — deploy templates and deploy notes
-- `nginx/` — project nginx configs
-
-## Environment
-
-Main backend env file:
-
-`backend/.env`
-
-Example variables are described in:
-
-- `.env.example`
-- `backend/.env.example` if present
+backend/    — backend  
+frontend/   — frontend  
+deploy/     — deploy notes  
+nginx/      — nginx configs  
 
 ## Local run
 
-### Backend
+Docker:
 
-```bash
-cd backend
-source .venv/bin/activate
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### Docker Compose
-
-```bash
 docker compose up -d --build
-```
 
-## Production services
+Manual:
 
-Server uses these services:
+Backend:
+cd backend  
+source .venv/bin/activate  
+uvicorn app.main:app --host 0.0.0.0 --port 8000  
 
-- `aat-backend.service`
-- `aat-celery.service`
-- `aat-celery-beat.service`
-- `nginx`
+Frontend:
+cd frontend  
+npm install  
+npm run dev  
 
-## Useful checks
+## Health check
 
-### Backend health
-
-```bash
 curl http://127.0.0.1:8000/api/health
-```
 
-### Through nginx
+## Production
 
-```bash
-curl http://portal.aat.local/api/health
-curl -k https://portal.aat.local/api/health
-```
+Nginx:
+sudo nginx -t  
+sudo systemctl reload nginx  
 
-### Service status
+Backend:
+sudo systemctl restart aat-backend.service  
+sudo systemctl status aat-backend.service --no-pager  
 
-```bash
-sudo systemctl status aat-backend.service --no-pager
-sudo systemctl status aat-celery.service --no-pager
-sudo systemctl status aat-celery-beat.service --no-pager
-sudo systemctl status nginx --no-pager
-```
+Celery:
+sudo systemctl daemon-reload  
+sudo systemctl restart aat-celery.service  
+sudo systemctl restart aat-celery-beat.service  
 
-### Logs
+## Logs
 
-```bash
-sudo journalctl -u aat-backend.service -n 100 --no-pager
-sudo journalctl -u aat-celery.service -n 100 --no-pager
-sudo journalctl -u aat-celery-beat.service -n 100 --no-pager
-```
+sudo journalctl -u aat-backend.service -n 100 --no-pager  
+sudo journalctl -u aat-celery.service -n 100 --no-pager  
+sudo journalctl -u aat-celery-beat.service -n 100 --no-pager  
 
-## Security status
+## Security
 
-Already implemented:
+- security headers  
+- CSP  
+- CORS hardening  
+- upload restrictions  
+- refresh token rotation  
+- nginx hardening  
 
-- security headers
-- CSP
-- CORS hardening
-- upload hardening
-- refresh token rotation
-- refresh token reuse detection
-- nginx hardening
-- HTTPS for internal environment
-- celery worker and beat cleanup
+## HTTPS
 
-## HTTPS notes
+Enabled for internal environment  
+Custom CA used  
+HSTS disabled  
 
-- HTTPS is enabled for internal environment
-- HSTS is intentionally disabled for now
+## Notes
 
-## Remaining work
+- system uses systemd services  
+- Celery worker and beat configured  
+- project intended for internal network  
 
-- SMTP / email notifications
-- Telegram notifications
+## TODO
 
-## Deployment notes
+- Telegram bot for admin / IT notifications  
+- public domain instead of .local  
 
-See:
+## Status
 
-`deploy/DEPLOY.md`
+Active development

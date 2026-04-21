@@ -8,13 +8,22 @@ User=admin865
 Group=www-data
 WorkingDirectory=/home/admin865/aat-internal-portal/backend
 EnvironmentFile=/home/admin865/aat-internal-portal/backend/.env
+
 ExecStartPre=/bin/mkdir -p /run/aat-celery
 ExecStartPre=/bin/chown admin865:www-data /run/aat-celery
-ExecStart=/home/admin865/aat-internal-portal/backend/.venv/bin/celery -A app.tasks.celery_app:celery_app beat --loglevel=INFO --pidfile=/run/aat-celery/beat.pid --schedule=/home/admin865/aat-internal-portal/backend/celerybeat-schedule
+
+ExecStart=/home/admin865/aat-internal-portal/backend/.venv/bin/celery \
+  -A app.tasks.celery_app:celery_app beat \
+  --loglevel=INFO \
+  --pidfile=/run/aat-celery/beat.pid \
+  --schedule=/home/admin865/aat-internal-portal/backend/celerybeat-schedule
+
 Restart=always
 RestartSec=5
+
 RuntimeDirectory=aat-celery
 RuntimeDirectoryMode=0755
+
 KillMode=mixed
 TimeoutStopSec=30
 
