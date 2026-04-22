@@ -1,39 +1,100 @@
 import { NavLink, Outlet } from "react-router-dom"
+import { Settings2, Shield, Users, Building2 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
 const tabs = [
-  { to: "/admin/users", label: "Учётные записи" },
-  { to: "/admin/employees", label: "Карточки сотрудников" },
-  { to: "/admin/departments", label: "Отделы" },
+  { to: "/admin/users", label: "Учётные записи", icon: Shield },
+  { to: "/admin/employees", label: "Карточки сотрудников", icon: Users },
+  { to: "/admin/departments", label: "Отделы", icon: Building2 },
 ]
 
 export default function AdminPage() {
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Администрирование</h1>
-        <p className="text-muted-foreground">Управление учётными записями, карточками сотрудников и отделами.</p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6 pb-12">
+      <section className="admin-hero relative overflow-hidden rounded-[2rem] border border-border/80 bg-card/95">
+        <div className="relative z-10 px-6 py-6 sm:px-8 sm:py-7">
+          <div className="max-w-3xl">
+            <p className="text-sm font-medium text-muted-foreground">Системные настройки доступа</p>
+            <h1 className="mt-2 flex items-center gap-3 text-2xl font-semibold leading-tight tracking-tight text-foreground sm:text-[2rem]">
+              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400">
+                <Settings2 className="h-5 w-5" />
+              </span>
+              Администрирование
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-[15px]">
+              Управление учётными записями, карточками сотрудников и отделами.
+            </p>
+          </div>
+        </div>
 
-      <div className="flex flex-wrap gap-2">
-        {tabs.map((tab) => (
-          <NavLink
-            key={tab.to}
-            to={tab.to}
-            className={({ isActive }) =>
-              cn(
-                "rounded-md border px-3 py-1.5 text-sm",
-                isActive ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+        <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-indigo-500/[0.07] blur-3xl dark:bg-sky-500/[0.08]" />
+        <div className="pointer-events-none absolute -bottom-16 -left-16 h-44 w-44 rounded-full bg-sky-500/[0.06] blur-3xl dark:bg-indigo-500/[0.06]" />
+      </section>
+
+      <div className="admin-card overflow-hidden rounded-2xl border border-border bg-card">
+        <div className="border-b border-border bg-muted/25 px-4 py-4 sm:px-5">
+          <div className="flex flex-wrap gap-2">
+            {tabs.map((tab) => {
+              const Icon = tab.icon
+              return (
+                <NavLink
+                  key={tab.to}
+                  to={tab.to}
+                  className={({ isActive }) =>
+                    cn(
+                      "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition",
+                      isActive
+                        ? "border-primary/20 bg-primary text-primary-foreground"
+                        : "border-border bg-background text-foreground hover:bg-accent"
+                    )
+                  }
+                >
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
+                </NavLink>
               )
-            }
-          >
-            {tab.label}
-          </NavLink>
-        ))}
+            })}
+          </div>
+        </div>
+
+        <div className="px-4 py-5 sm:px-5">
+          <Outlet />
+        </div>
       </div>
 
-      <Outlet />
+      <style>{`
+        .admin-hero {
+          border-radius: 2rem;
+          border: 1px solid hsl(var(--border));
+          background:
+            radial-gradient(circle at top right, rgb(99 102 241 / 0.08), transparent 30%),
+            radial-gradient(circle at bottom left, rgb(14 165 233 / 0.08), transparent 28%),
+            hsl(var(--card));
+          box-shadow:
+            -20px 0 40px -18px rgb(99 102 241 / 0.18),
+            20px 0 40px -18px rgb(14 165 233 / 0.12),
+            0 6px 22px -10px rgb(99 102 241 / 0.12);
+        }
+        .dark .admin-hero {
+          box-shadow:
+            -22px 0 44px -16px rgb(56 189 248 / 0.16),
+            22px 0 44px -16px rgb(139 92 246 / 0.12),
+            0 6px 22px -10px rgb(56 189 248 / 0.08);
+        }
+        .admin-card {
+          box-shadow:
+            -10px 0 20px -14px rgb(99 102 241 / 0.14),
+            10px 0 20px -14px rgb(14 165 233 / 0.10),
+            0 1px 3px rgb(0 0 0 / 0.04);
+        }
+        .dark .admin-card {
+          box-shadow:
+            -12px 0 24px -12px rgb(56 189 248 / 0.12),
+            12px 0 24px -12px rgb(139 92 246 / 0.10),
+            0 1px 3px rgb(0 0 0 / 0.25);
+        }
+      `}</style>
     </div>
   )
 }

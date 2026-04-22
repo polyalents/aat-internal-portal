@@ -14,21 +14,23 @@ export async function getChats(): Promise<Chat[]> {
   return data.items
 }
 
-export async function markChatRead(chatId: string): Promise<void> {
-  await client.post(`/chat/chats/${chatId}/read`)
-}
-
-export async function pinChat(chatId: string): Promise<void> {
-  await client.post(`/chat/chats/${chatId}/pin`)
-}
-
-export async function unpinChat(chatId: string): Promise<void> {
-  await client.post(`/chat/chats/${chatId}/unpin`)
-}
-
 export async function getOrCreateDirectChat(userId: string): Promise<Chat> {
   const { data } = await client.post("/chat/chats/direct", { user_id: userId })
   return data
+}
+
+export async function pinChat(chatId: string): Promise<Chat> {
+  const { data } = await client.post(`/chat/chats/${chatId}/pin`)
+  return data
+}
+
+export async function unpinChat(chatId: string): Promise<Chat> {
+  const { data } = await client.post(`/chat/chats/${chatId}/unpin`)
+  return data
+}
+
+export async function markChatAsRead(chatId: string): Promise<void> {
+  await client.post(`/chat/chats/${chatId}/read`)
 }
 
 export async function searchChatEmployees(search: string): Promise<Employee[]> {
@@ -106,7 +108,10 @@ export async function createChatMessage(payload: {
   files?: File[]
 }): Promise<ChatMessage> {
   const form = new FormData()
-  form.append("text", payload.text ?? "")
+
+  if (payload.text) {
+    form.append("text", payload.text)
+  }
 
   for (const file of payload.files ?? []) {
     form.append("files", file)

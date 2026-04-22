@@ -69,5 +69,11 @@ class Department(Base):
         foreign_keys=[parent_id],
     )
 
+    chats: Mapped[list["Chat"]] = relationship(
+        "Chat",
+        back_populates="department",
+        foreign_keys="Chat.department_id",
+    )
+
     def __repr__(self) -> str:
         return f"<Department id={self.id} name={self.name}>"

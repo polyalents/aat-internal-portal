@@ -17,10 +17,11 @@ class ChatRead(BaseModel):
     type: ChatType
     title: str
     participants: list[ChatParticipantRead]
-    unread_count: int = 0
+    unread_count: int
     last_message_preview: str | None = None
     last_message_at: datetime | None = None
     is_pinned: bool = False
+    is_fixed: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -49,6 +50,7 @@ class ChatAttachmentRead(BaseModel):
 
 
 class ChatMessageStatusRead(BaseModel):
+    user_id: UUID
     delivered_at: datetime | None = None
     read_at: datetime | None = None
 
@@ -65,7 +67,7 @@ class ChatMessageRead(BaseModel):
     is_deleted: bool
     created_at: datetime
     attachments: list[ChatAttachmentRead] = []
-    my_status: ChatMessageStatusRead | None = None
+    statuses: list[ChatMessageStatusRead] = []
 
     model_config = {"from_attributes": True}
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { isAxiosError } from "axios"
 import { useLocation, useSearchParams } from "react-router-dom"
+import { Plus, Search, UserSquare2 } from "lucide-react"
 
 import {
   createAdminEmployee,
@@ -13,6 +14,7 @@ import {
 import type { Department, Employee, User } from "@/shared/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
 
 interface EmployeeFormState {
   first_name: string
@@ -83,19 +85,10 @@ function formToPayload(form: EmployeeFormState) {
 }
 
 function validateEmployeeForm(form: EmployeeFormState): string | null {
-  if (!form.last_name.trim()) {
-    return "Заполните фамилию"
-  }
-  if (!form.first_name.trim()) {
-    return "Заполните имя"
-  }
-  if (!form.position.trim()) {
-    return "Заполните должность"
-  }
-  if (!form.email.trim()) {
-    return "Заполните email"
-  }
-
+  if (!form.last_name.trim()) return "Заполните фамилию"
+  if (!form.first_name.trim()) return "Заполните имя"
+  if (!form.position.trim()) return "Заполните должность"
+  if (!form.email.trim()) return "Заполните email"
   return null
 }
 
@@ -261,12 +254,7 @@ export default function AdminEmployeesPage() {
       await loadData(search)
     } catch (err) {
       if (isAxiosError(err) && err.response?.status === 409) {
-        setError(
-          String(
-            err.response?.data?.detail ||
-            "Удаление недоступно. Карточка используется в связанных данных."
-          )
-        )
+        setError(String(err.response?.data?.detail || "Удаление недоступно. Карточка используется в связанных данных."))
         return
       }
 
@@ -275,349 +263,265 @@ export default function AdminEmployeesPage() {
   }
 
   return (
-    <div className="space-y-6 overflow-x-hidden">
-      <header className="space-y-1">
-        <h2 className="text-xl font-semibold">Карточки сотрудников</h2>
-        <p className="text-sm text-muted-foreground">
-          Создание и редактирование карточек сотрудников.
-        </p>
-      </header>
+    <div className="space-y-6">
+      {error && <Alert tone="error">{error}</Alert>}
+      {info && <Alert tone="success">{info}</Alert>}
 
-      {error && (
-        <div className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      {info && (
-        <div className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-700">
-          {info}
-        </div>
-      )}
-
-      <section className="space-y-5 rounded-xl border bg-card p-4 shadow-sm sm:p-5">
-        <h3 className="text-base font-semibold">Новая карточка сотрудника</h3>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <Input
-            placeholder="Фамилия*"
-            value={createForm.last_name}
-            onChange={(e) => handleCreateFormChange("last_name", e.target.value)}
-          />
-          <Input
-            placeholder="Имя*"
-            value={createForm.first_name}
-            onChange={(e) => handleCreateFormChange("first_name", e.target.value)}
-          />
-          <Input
-            placeholder="Отчество (при наличии)"
-            value={createForm.middle_name}
-            onChange={(e) => handleCreateFormChange("middle_name", e.target.value)}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <Input
-            placeholder="Должность*"
-            value={createForm.position}
-            onChange={(e) => handleCreateFormChange("position", e.target.value)}
-          />
-          <Input
-            placeholder="Email*"
-            value={createForm.email}
-            onChange={(e) => handleCreateFormChange("email", e.target.value)}
-          />
-          <Input
-            placeholder="Кабинет"
-            value={createForm.room_number}
-            onChange={(e) => handleCreateFormChange("room_number", e.target.value)}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <Input
-            placeholder="Внутренний телефон"
-            value={createForm.internal_phone}
-            onChange={(e) => handleCreateFormChange("internal_phone", e.target.value)}
-          />
-          <Input
-            placeholder="Мобильный телефон"
-            value={createForm.mobile_phone}
-            onChange={(e) => handleCreateFormChange("mobile_phone", e.target.value)}
-          />
-          <label className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
-            Дата рождения
-            <Input
-              className="mt-1"
-              type="date"
-              value={createForm.birth_date}
-              onChange={(e) => handleCreateFormChange("birth_date", e.target.value)}
-            />
-          </label>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <label className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
-            Начало отпуска
-            <Input
-              className="mt-1"
-              type="date"
-              value={createForm.vacation_start}
-              onChange={(e) => handleCreateFormChange("vacation_start", e.target.value)}
-            />
-          </label>
-          <label className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
-            Конец отпуска
-            <Input
-              className="mt-1"
-              type="date"
-              value={createForm.vacation_end}
-              onChange={(e) => handleCreateFormChange("vacation_end", e.target.value)}
-            />
-          </label>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <select
-            className="h-11 rounded-md border bg-background px-2.5 text-sm"
-            value={createForm.department_id}
-            onChange={(e) => handleCreateFormChange("department_id", e.target.value)}
-          >
-            <option value="">Отдел не выбран</option>
-            {departments.map((department) => (
-              <option key={department.id} value={department.id}>
-                {department.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            className="h-11 rounded-md border bg-background px-2.5 text-sm"
-            value={createForm.user_id}
-            onChange={(e) => handleCreateFormChange("user_id", e.target.value)}
-          >
-            <option value="">Учётная запись не привязана</option>
-            {availableUsersForEmployee(null).map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.username}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <Button className="w-full sm:w-auto" onClick={() => void handleCreateEmployee()}>
-          Создать карточку
-        </Button>
-      </section>
-
-      <section className="space-y-4">
-        <div className="flex flex-wrap gap-2">
-          <Input
-            className="w-full sm:min-w-72 sm:flex-1"
-            placeholder="Поиск по ФИО, должности или email"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <Button className="w-full sm:w-auto" variant="outline" onClick={() => void loadData(search)}>
-            Найти
-          </Button>
-        </div>
-
-        <div className="space-y-4">
-          {employees.map((employee) => {
-            const isEditing = editingId === employee.id
-            const currentForm = isEditing ? editForm : toForm(employee)
-
-            return (
-              <article
-                key={employee.id}
-                className="space-y-5 rounded-xl border bg-card p-4 shadow-sm sm:p-5"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h4 className="font-semibold">{employee.full_name}</h4>
-                    <p className="text-sm text-muted-foreground">
-                      {employee.position} · {employee.email}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Отдел: {employee.department_name || "не назначен"}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Руководитель: {employee.manager_name || "не назначен"}
-                    </p>
-                  </div>
-
-                  <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-                    {!isEditing ? (
-                      <>
-                        <Button
-                          className="w-full sm:w-auto"
-                          size="sm"
-                          onClick={() => startEdit(employee)}
-                        >
-                          Редактировать
-                        </Button>
-                        <Button
-                          className="w-full sm:w-auto"
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => void deleteEmployee(employee)}
-                        >
-                          Удалить
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <Button
-                          className="w-full sm:w-auto"
-                          size="sm"
-                          onClick={() => void saveEdit(employee.id)}
-                        >
-                          Сохранить
-                        </Button>
-                        <Button
-                          className="w-full sm:w-auto"
-                          size="sm"
-                          variant="outline"
-                          onClick={cancelEdit}
-                        >
-                          Отмена
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  <Input
-                    disabled={!isEditing}
-                    placeholder="Фамилия"
-                    value={currentForm.last_name}
-                    onChange={(e) => handleEditFormChange("last_name", e.target.value)}
-                  />
-                  <Input
-                    disabled={!isEditing}
-                    placeholder="Имя"
-                    value={currentForm.first_name}
-                    onChange={(e) => handleEditFormChange("first_name", e.target.value)}
-                  />
-                  <Input
-                    disabled={!isEditing}
-                    placeholder="Отчество (при наличии)"
-                    value={currentForm.middle_name}
-                    onChange={(e) => handleEditFormChange("middle_name", e.target.value)}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  <Input
-                    disabled={!isEditing}
-                    placeholder="Должность"
-                    value={currentForm.position}
-                    onChange={(e) => handleEditFormChange("position", e.target.value)}
-                  />
-                  <Input
-                    disabled={!isEditing}
-                    placeholder="Email"
-                    value={currentForm.email}
-                    onChange={(e) => handleEditFormChange("email", e.target.value)}
-                  />
-                  <Input
-                    disabled={!isEditing}
-                    placeholder="Кабинет"
-                    value={currentForm.room_number}
-                    onChange={(e) => handleEditFormChange("room_number", e.target.value)}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  <Input
-                    disabled={!isEditing}
-                    placeholder="Внутренний телефон"
-                    value={currentForm.internal_phone}
-                    onChange={(e) => handleEditFormChange("internal_phone", e.target.value)}
-                  />
-                  <Input
-                    disabled={!isEditing}
-                    placeholder="Мобильный телефон"
-                    value={currentForm.mobile_phone}
-                    onChange={(e) => handleEditFormChange("mobile_phone", e.target.value)}
-                  />
-                  <label className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
-                    Дата рождения
-                    <Input
-                      disabled={!isEditing}
-                      className="mt-1"
-                      type="date"
-                      value={currentForm.birth_date}
-                      onChange={(e) => handleEditFormChange("birth_date", e.target.value)}
-                    />
-                  </label>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  <label className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
-                    Начало отпуска
-                    <Input
-                      disabled={!isEditing}
-                      className="mt-1"
-                      type="date"
-                      value={currentForm.vacation_start}
-                      onChange={(e) => handleEditFormChange("vacation_start", e.target.value)}
-                    />
-                  </label>
-                  <label className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
-                    Конец отпуска
-                    <Input
-                      disabled={!isEditing}
-                      className="mt-1"
-                      type="date"
-                      value={currentForm.vacation_end}
-                      onChange={(e) => handleEditFormChange("vacation_end", e.target.value)}
-                    />
-                  </label>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  <select
-                    disabled={!isEditing}
-                    className="h-11 rounded-md border bg-background px-2.5 text-sm"
-                    value={currentForm.department_id}
-                    onChange={(e) => handleEditFormChange("department_id", e.target.value)}
-                  >
-                    <option value="">Отдел не выбран</option>
-                    {departments.map((department) => (
-                      <option key={department.id} value={department.id}>
-                        {department.name}
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    disabled={!isEditing}
-                    className="h-11 rounded-md border bg-background px-2.5 text-sm"
-                    value={currentForm.user_id}
-                    onChange={(e) => handleEditFormChange("user_id", e.target.value)}
-                  >
-                    <option value="">Учётная запись не привязана</option>
-                    {availableUsersForEmployee(employee).map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.username}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </article>
-            )
-          })}
-
-          {employees.length === 0 && (
-            <div className="rounded-lg border p-4 text-sm text-muted-foreground">
-              Список пуст.
+      <section className="rounded-2xl border border-border bg-card">
+        <div className="border-b border-border bg-muted/25 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400">
+              <UserSquare2 className="h-5 w-5" />
             </div>
-          )}
+            <div>
+              <h2 className="text-base font-semibold">Карточки сотрудников</h2>
+              <p className="text-sm text-muted-foreground">Создание и редактирование карточек сотрудников.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-5 py-5">
+          <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
+            <div className="mb-4 flex items-center gap-2">
+              <Plus className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-semibold">Новая карточка сотрудника</h3>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <Input placeholder="Фамилия*" value={createForm.last_name} onChange={(e) => handleCreateFormChange("last_name", e.target.value)} />
+              <Input placeholder="Имя*" value={createForm.first_name} onChange={(e) => handleCreateFormChange("first_name", e.target.value)} />
+              <Input placeholder="Отчество (при наличии)" value={createForm.middle_name} onChange={(e) => handleCreateFormChange("middle_name", e.target.value)} />
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <Input placeholder="Должность*" value={createForm.position} onChange={(e) => handleCreateFormChange("position", e.target.value)} />
+              <Input placeholder="Email*" value={createForm.email} onChange={(e) => handleCreateFormChange("email", e.target.value)} />
+              <Input placeholder="Кабинет" value={createForm.room_number} onChange={(e) => handleCreateFormChange("room_number", e.target.value)} />
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <Input placeholder="Внутренний телефон" value={createForm.internal_phone} onChange={(e) => handleCreateFormChange("internal_phone", e.target.value)} />
+              <Input placeholder="Мобильный телефон" value={createForm.mobile_phone} onChange={(e) => handleCreateFormChange("mobile_phone", e.target.value)} />
+              <label className="rounded-xl border border-border/70 bg-background px-3 py-2 text-sm text-muted-foreground">
+                Дата рождения
+                <Input className="mt-1" type="date" value={createForm.birth_date} onChange={(e) => handleCreateFormChange("birth_date", e.target.value)} />
+              </label>
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <label className="rounded-xl border border-border/70 bg-background px-3 py-2 text-sm text-muted-foreground">
+                Начало отпуска
+                <Input className="mt-1" type="date" value={createForm.vacation_start} onChange={(e) => handleCreateFormChange("vacation_start", e.target.value)} />
+              </label>
+              <label className="rounded-xl border border-border/70 bg-background px-3 py-2 text-sm text-muted-foreground">
+                Конец отпуска
+                <Input className="mt-1" type="date" value={createForm.vacation_end} onChange={(e) => handleCreateFormChange("vacation_end", e.target.value)} />
+              </label>
+              <div />
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <select
+                className="admin-input h-11 rounded-xl px-2.5 text-sm"
+                value={createForm.department_id}
+                onChange={(e) => handleCreateFormChange("department_id", e.target.value)}
+              >
+                <option value="">Отдел не выбран</option>
+                {departments.map((department) => (
+                  <option key={department.id} value={department.id}>{department.name}</option>
+                ))}
+              </select>
+
+              <select
+                className="admin-input h-11 rounded-xl px-2.5 text-sm"
+                value={createForm.user_id}
+                onChange={(e) => handleCreateFormChange("user_id", e.target.value)}
+              >
+                <option value="">Учётная запись не привязана</option>
+                {availableUsersForEmployee(null).map((user) => (
+                  <option key={user.id} value={user.id}>{user.username}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mt-4">
+              <Button className="w-full sm:w-auto" onClick={() => void handleCreateEmployee()}>
+                Создать карточку
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            <div className="relative w-full sm:min-w-72 sm:flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="pl-9"
+                placeholder="Поиск по ФИО, должности или email"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <Button className="w-full sm:w-auto" variant="outline" onClick={() => void loadData(search)}>
+              Найти
+            </Button>
+          </div>
+
+          <div className="mt-5 space-y-4">
+            {employees.map((employee) => {
+              const isEditing = editingId === employee.id
+              const currentForm = isEditing ? editForm : toForm(employee)
+
+              return (
+                <article key={employee.id} className="rounded-2xl border border-border/60 bg-muted/15 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h4 className="font-semibold">{employee.full_name}</h4>
+                      <p className="text-sm text-muted-foreground">{employee.position} · {employee.email}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Отдел: {employee.department_name || "не назначен"}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Руководитель: {employee.manager_name || "не назначен"}</p>
+                    </div>
+
+                    <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                      {!isEditing ? (
+                        <>
+                          <Button className="w-full sm:w-auto" size="sm" onClick={() => startEdit(employee)}>
+                            Редактировать
+                          </Button>
+                          <Button className="w-full sm:w-auto" size="sm" variant="destructive" onClick={() => void deleteEmployee(employee)}>
+                            Удалить
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button className="w-full sm:w-auto" size="sm" onClick={() => void saveEdit(employee.id)}>
+                            Сохранить
+                          </Button>
+                          <Button className="w-full sm:w-auto" size="sm" variant="outline" onClick={cancelEdit}>
+                            Отмена
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <Input disabled={!isEditing} placeholder="Фамилия" value={currentForm.last_name} onChange={(e) => handleEditFormChange("last_name", e.target.value)} />
+                    <Input disabled={!isEditing} placeholder="Имя" value={currentForm.first_name} onChange={(e) => handleEditFormChange("first_name", e.target.value)} />
+                    <Input disabled={!isEditing} placeholder="Отчество (при наличии)" value={currentForm.middle_name} onChange={(e) => handleEditFormChange("middle_name", e.target.value)} />
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <Input disabled={!isEditing} placeholder="Должность" value={currentForm.position} onChange={(e) => handleEditFormChange("position", e.target.value)} />
+                    <Input disabled={!isEditing} placeholder="Email" value={currentForm.email} onChange={(e) => handleEditFormChange("email", e.target.value)} />
+                    <Input disabled={!isEditing} placeholder="Кабинет" value={currentForm.room_number} onChange={(e) => handleEditFormChange("room_number", e.target.value)} />
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <Input disabled={!isEditing} placeholder="Внутренний телефон" value={currentForm.internal_phone} onChange={(e) => handleEditFormChange("internal_phone", e.target.value)} />
+                    <Input disabled={!isEditing} placeholder="Мобильный телефон" value={currentForm.mobile_phone} onChange={(e) => handleEditFormChange("mobile_phone", e.target.value)} />
+                    <label className="rounded-xl border border-border/70 bg-background px-3 py-2 text-sm text-muted-foreground">
+                      Дата рождения
+                      <Input disabled={!isEditing} className="mt-1" type="date" value={currentForm.birth_date} onChange={(e) => handleEditFormChange("birth_date", e.target.value)} />
+                    </label>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <label className="rounded-xl border border-border/70 bg-background px-3 py-2 text-sm text-muted-foreground">
+                      Начало отпуска
+                      <Input disabled={!isEditing} className="mt-1" type="date" value={currentForm.vacation_start} onChange={(e) => handleEditFormChange("vacation_start", e.target.value)} />
+                    </label>
+                    <label className="rounded-xl border border-border/70 bg-background px-3 py-2 text-sm text-muted-foreground">
+                      Конец отпуска
+                      <Input disabled={!isEditing} className="mt-1" type="date" value={currentForm.vacation_end} onChange={(e) => handleEditFormChange("vacation_end", e.target.value)} />
+                    </label>
+                    <div />
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <select
+                      disabled={!isEditing}
+                      className="admin-input h-11 rounded-xl px-2.5 text-sm"
+                      value={currentForm.department_id}
+                      onChange={(e) => handleEditFormChange("department_id", e.target.value)}
+                    >
+                      <option value="">Отдел не выбран</option>
+                      {departments.map((department) => (
+                        <option key={department.id} value={department.id}>{department.name}</option>
+                      ))}
+                    </select>
+
+                    <select
+                      disabled={!isEditing}
+                      className="admin-input h-11 rounded-xl px-2.5 text-sm"
+                      value={currentForm.user_id}
+                      onChange={(e) => handleEditFormChange("user_id", e.target.value)}
+                    >
+                      <option value="">Учётная запись не привязана</option>
+                      {availableUsersForEmployee(employee).map((user) => (
+                        <option key={user.id} value={user.id}>{user.username}</option>
+                      ))}
+                    </select>
+                  </div>
+                </article>
+              )
+            })}
+
+            {employees.length === 0 && (
+              <div className="rounded-2xl border border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
+                Список пуст.
+              </div>
+            )}
+          </div>
         </div>
       </section>
+
+      <style>{`
+        .admin-input {
+          border: 1px solid rgb(209 213 219);
+          background: rgb(249 250 251);
+          color: rgb(17 24 39);
+          transition: border-color .15s, box-shadow .15s, background .15s;
+        }
+        .admin-input:hover {
+          border-color: rgb(156 163 175);
+          background: #fff;
+        }
+        .admin-input:focus {
+          outline: none;
+          border-color: rgb(99 102 241);
+          background: #fff;
+          box-shadow: 0 0 0 3px rgb(99 102 241 / .15);
+        }
+        .dark .admin-input {
+          border-color: rgb(51 65 85);
+          background: rgb(30 41 59);
+          color: rgb(241 245 249);
+        }
+        .dark .admin-input:hover {
+          border-color: rgb(71 85 105);
+          background: rgb(35 46 66);
+        }
+        .dark .admin-input:focus {
+          border-color: rgb(56 189 248);
+          background: rgb(35 46 66);
+          box-shadow: 0 0 0 3px rgb(56 189 248 / .2);
+        }
+      `}</style>
     </div>
   )
+}
+
+function Alert({
+  tone,
+  children,
+}: {
+  tone: "error" | "success"
+  children: React.ReactNode
+}) {
+  const styles =
+    tone === "error"
+      ? "border-red-300 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
+      : "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
+
+  return <div className={cn("rounded-xl border px-4 py-3 text-sm", styles)}>{children}</div>
 }

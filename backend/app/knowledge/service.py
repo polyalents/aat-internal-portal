@@ -4,7 +4,11 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.knowledge.models import KnowledgeArticle, KnowledgeCategory
+from app.knowledge.models import (
+    KnowledgeArticle,
+    KnowledgeArticleAttachment,
+    KnowledgeCategory,
+)
 from app.knowledge.schemas import (
     ArticleCreate,
     ArticleUpdate,
@@ -68,6 +72,7 @@ async def get_articles(
     stmt = select(KnowledgeArticle).options(
         selectinload(KnowledgeArticle.category),
         selectinload(KnowledgeArticle.author),
+        selectinload(KnowledgeArticle.attachments),
     )
     count_stmt = select(func.count()).select_from(KnowledgeArticle)
 
@@ -79,7 +84,8 @@ async def get_articles(
         pattern = f"%{search.strip()}%"
         search_filter = or_(
             KnowledgeArticle.title.ilike(pattern),
-            KnowledgeArticle.content.ilike(pattern),
+            KnowledgeArticle.content_text.ilike(pattern),
+            KnowledgeArticle.content_html.ilike(pattern),
         )
         stmt = stmt.where(search_filter)
         count_stmt = count_stmt.where(search_filter)
@@ -87,7 +93,7 @@ async def get_articles(
     total = (await db.execute(count_stmt)).scalar() or 0
     stmt = stmt.order_by(KnowledgeArticle.updated_at.desc()).offset((page - 1) * size).limit(size)
     result = await db.execute(stmt)
-    return list(result.scalars().all()), total
+    return list(result.scalars().unique().all()), total
 
 
 async def get_article_by_id(db: AsyncSession, article_id: UUID) -> KnowledgeArticle | None:
@@ -96,6 +102,7 @@ async def get_article_by_id(db: AsyncSession, article_id: UUID) -> KnowledgeArti
         .options(
             selectinload(KnowledgeArticle.category),
             selectinload(KnowledgeArticle.author),
+            selectinload(KnowledgeArticle.attachments),
         )
         .where(KnowledgeArticle.id == article_id)
     )
@@ -110,7 +117,8 @@ async def create_article(db: AsyncSession, data: ArticleCreate, author_id: UUID)
 
     article = KnowledgeArticle(
         title=data.title.strip(),
-        content=data.content.strip(),
+        content_html=data.content_html.strip(),
+        content_text=data.content_text.strip(),
         category_id=data.category_id,
         author_id=author_id,
     )
@@ -130,8 +138,11 @@ async def update_article(
     if "title" in update_data and update_data["title"] is not None:
         update_data["title"] = update_data["title"].strip()
 
-    if "content" in update_data and update_data["content"] is not None:
-        update_data["content"] = update_data["content"].strip()
+    if "content_html" in update_data and update_data["content_html"] is not None:
+        update_data["content_html"] = update_data["content_html"].strip()
+
+    if "content_text" in update_data and update_data["content_text"] is not None:
+        update_data["content_text"] = update_data["content_text"].strip()
 
     if "category_id" in update_data and update_data["category_id"] is not None:
         category = await get_knowledge_category_by_id(db, update_data["category_id"])

@@ -125,6 +125,16 @@ export interface TicketCategory {
   is_active: boolean
 }
 
+export interface TicketAttachment {
+  id: string
+  ticket_id: string
+  filename: string
+  file_path: string
+  file_size: number
+  content_type: string
+  uploaded_at: string
+}
+
 export interface Ticket {
   id: string
   number: number
@@ -160,16 +170,6 @@ export interface TicketCreate {
   internal_phone?: string
   room_number?: string
   contact_email?: string
-}
-
-export interface TicketAttachment {
-  id: string
-  ticket_id: string
-  filename: string
-  file_path: string
-  file_size: number
-  content_type: string
-  uploaded_at: string
 }
 
 export interface TicketComment {
@@ -230,20 +230,47 @@ export interface KnowledgeCategory {
   sort_order: number
 }
 
+export interface KnowledgeAttachment {
+  id: string
+  article_id: string
+  filename: string
+  file_path?: string
+  file_url?: string
+  file_size: number
+  content_type: string
+  uploaded_at: string
+}
+
 export interface KnowledgeArticle {
   id: string
   title: string
-  content: string
+  content_html: string
+  content_text: string
   category_id: string
   category_name: string | null
   author_id: string
   author_name: string | null
   created_at: string
   updated_at: string
+  attachments?: KnowledgeAttachment[]
+}
+
+export interface KnowledgeArticleCreate {
+  title: string
+  category_id: string
+  content_html: string
+  content_text: string
+}
+
+export interface KnowledgeArticleUpdate {
+  title?: string
+  category_id?: string
+  content_html?: string
+  content_text?: string
 }
 
 // === Chat ===
-export type ChatType = "global" | "direct"
+export type ChatType = "global" | "direct" | "department"
 export type ChatAttachmentType = "image" | "document"
 
 export interface ChatParticipant {
@@ -258,9 +285,10 @@ export interface Chat {
   title: string
   participants: ChatParticipant[]
   unread_count: number
-  last_message_preview: string | null
-  last_message_at: string | null
+  last_message_preview?: string | null
+  last_message_at?: string | null
   is_pinned: boolean
+  is_fixed: boolean
   created_at: string
   updated_at: string
 }
@@ -277,8 +305,11 @@ export interface ChatAttachment {
 }
 
 export interface ChatMessageStatus {
+  id?: string
+  user_id: string
   delivered_at: string | null
   read_at: string | null
+  email_notified_at?: string | null
 }
 
 export interface ChatMessage {
@@ -291,7 +322,7 @@ export interface ChatMessage {
   created_at: string
   is_deleted: boolean
   attachments: ChatAttachment[]
-  my_status: ChatMessageStatus | null
+  statuses: ChatMessageStatus[]
 }
 
 // === Dashboard ===

@@ -22,29 +22,46 @@ class KnowledgeCategoryUpdate(BaseModel):
     sort_order: int | None = None
 
 
+class KnowledgeAttachmentRead(BaseModel):
+    id: UUID
+    article_id: UUID
+    filename: str
+    file_path: str
+    file_url: str
+    file_size: int
+    content_type: str
+    uploaded_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class ArticleRead(BaseModel):
     id: UUID
     title: str
-    content: str
+    content_html: str
+    content_text: str
     category_id: UUID
     category_name: str | None = None
     author_id: UUID
     author_name: str | None = None
     created_at: datetime
     updated_at: datetime
+    attachments: list[KnowledgeAttachmentRead] = []
 
     model_config = {"from_attributes": True}
 
 
 class ArticleCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
-    content: str = Field(..., min_length=1)
+    content_html: str = Field(..., min_length=1)
+    content_text: str = Field(..., min_length=1)
     category_id: UUID
 
 
 class ArticleUpdate(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=500)
-    content: str | None = None
+    content_html: str | None = None
+    content_text: str | None = None
     category_id: UUID | None = None
 
 

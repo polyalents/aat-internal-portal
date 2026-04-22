@@ -1,4 +1,3 @@
-import mimetypes
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,14 +20,17 @@ from app.chat.models import (
     ChatType,
 )
 from app.config import settings
+from app.departments.models import Department
 from app.employees.models import Employee
 from app.users.models import User
+
 
 ALLOWED_IMAGE_TYPES = {
     "image/jpeg": "jpg",
     "image/png": "png",
     "image/webp": "webp",
 }
+
 ALLOWED_DOCUMENT_TYPES = {
     "application/pdf": "pdf",
     "application/msword": "doc",
@@ -38,6 +40,7 @@ ALLOWED_DOCUMENT_TYPES = {
     "text/plain": "txt",
     "text/csv": "csv",
 }
+
 MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024
 MAX_ATTACHMENTS_PER_MESSAGE = 5
 
@@ -50,8 +53,66 @@ def _upload_root() -> Path:
     return Path(settings.upload_dir).expanduser().resolve()
 
 
+def _chat_load_options():
+    return (
+        selectinload(Chat.department),
+        selectinload(Chat.read_states),
+        selectinload(Chat.participants)
+        .selectinload(ChatParticipant.user)
+        .selectinload(User.employee),
+        selectinload(Chat.messages)
+        .selectinload(ChatMessage.author)
+        .selectinload(User.employee),
+        selectinload(Chat.messages).selectinload(ChatMessage.attachments),
+        selectinload(Chat.messages).selectinload(ChatMessage.statuses),
+    )
+
+
+async def _user_has_active_employee(db: AsyncSession, user_id: UUID) -> bool:
+    result = await db.execute(
+        select(Employee.id)
+        .join(User, User.id == Employee.user_id)
+        .where(
+            Employee.user_id == user_id,
+            User.is_active.is_(True),
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
+async def _eligible_employee_users_result(db: AsyncSession):
+    return await db.execute(
+        select(Employee)
+        .options(selectinload(Employee.user))
+        .join(User, User.id == Employee.user_id)
+        .where(
+            Employee.user_id.is_not(None),
+            User.is_active.is_(True),
+        )
+    )
+
+
+async def _reload_chat(db: AsyncSession, chat_id: UUID) -> Chat:
+    result = await db.execute(
+        select(Chat)
+        .options(*_chat_load_options())
+        .where(Chat.id == chat_id)
+        .limit(1)
+    )
+    chat = result.scalar_one_or_none()
+    if chat is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found")
+    return chat
+
+
 async def ensure_global_chat(db: AsyncSession) -> Chat:
-    result = await db.execute(select(Chat).where(Chat.type == ChatType.global_chat).limit(1))
+    result = await db.execute(
+        select(Chat)
+        .options(*_chat_load_options())
+        .where(Chat.type == ChatType.global_chat)
+        .limit(1)
+    )
     chat = result.scalar_one_or_none()
     if chat is not None:
         return chat
@@ -59,10 +120,13 @@ async def ensure_global_chat(db: AsyncSession) -> Chat:
     chat = Chat(type=ChatType.global_chat, direct_key=None)
     db.add(chat)
     await db.flush()
-    return chat
+    return await _reload_chat(db, chat.id)
 
 
 async def ensure_global_participant(db: AsyncSession, chat_id: UUID, user_id: UUID) -> None:
+    if not await _user_has_active_employee(db, user_id):
+        return
+
     existing = await db.execute(
         select(ChatParticipant).where(
             ChatParticipant.chat_id == chat_id,
@@ -91,197 +155,258 @@ async def ensure_chat_read_state(db: AsyncSession, chat_id: UUID, user_id: UUID)
     return state
 
 
-async def ensure_message_statuses_for_chat(
-    db: AsyncSession,
-    chat: Chat,
-) -> None:
-    participants = [item.user_id for item in chat.participants]
-    if not participants:
-        return
+async def sync_global_chat_participants(db: AsyncSession) -> None:
+    chat = await ensure_global_chat(db)
 
-    result = await db.execute(
-        select(ChatMessage)
-        .options(selectinload(ChatMessage.statuses))
-        .where(ChatMessage.chat_id == chat.id)
-    )
-    messages = list(result.scalars().unique().all())
+    employees_result = await _eligible_employee_users_result(db)
+    employees = list(employees_result.scalars().unique().all())
+    target_user_ids = {
+        employee.user_id
+        for employee in employees
+        if employee.user_id
+    }
 
-    now = _now()
-    created_any = False
+    existing_user_ids = {
+        participant.user_id
+        for participant in chat.participants
+        if participant.user is not None
+        and participant.user.is_active
+        and getattr(participant.user, "employee", None) is not None
+    }
 
-    for message in messages:
-        existing_user_ids = {status.user_id for status in message.statuses}
-        for user_id in participants:
-            if user_id == message.author_id:
-                continue
-            if user_id in existing_user_ids:
-                continue
-
-            db.add(
-                ChatMessageStatus(
-                    message_id=message.id,
-                    user_id=user_id,
-                    delivered_at=now,
-                )
-            )
-            created_any = True
-
-    if created_any:
+    for user_id in target_user_ids - existing_user_ids:
+        db.add(ChatParticipant(chat_id=chat.id, user_id=user_id))
         await db.flush()
 
+    removable = [
+        participant
+        for participant in list(chat.participants)
+        if (
+            participant.user_id not in target_user_ids
+            or participant.user is None
+            or not participant.user.is_active
+            or getattr(participant.user, "employee", None) is None
+        )
+    ]
+    for participant in removable:
+        await db.delete(participant)
 
-async def mark_chat_as_read(db: AsyncSession, chat_id: UUID, user_id: UUID) -> None:
-    state = await ensure_chat_read_state(db, chat_id, user_id)
+    for user_id in target_user_ids:
+        await ensure_chat_read_state(db, chat.id, user_id)
 
-    chat_result = await db.execute(
-        select(Chat)
-        .options(selectinload(Chat.participants))
-        .where(Chat.id == chat_id)
-    )
-    chat = chat_result.scalar_one_or_none()
-    if chat is None:
-        return
+    await db.flush()
 
-    await ensure_message_statuses_for_chat(db, chat)
 
-    result = await db.execute(
-        select(ChatMessage)
-        .where(ChatMessage.chat_id == chat_id)
-        .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
-        .limit(1)
-    )
-    latest = result.scalar_one_or_none()
-
-    now = _now()
-
-    if latest is not None:
-        state.last_read_message_id = latest.id
-        state.last_read_at = now
-
-    statuses = await db.execute(
-        select(ChatMessageStatus)
-        .join(ChatMessage, ChatMessage.id == ChatMessageStatus.message_id)
-        .where(
-            ChatMessage.chat_id == chat_id,
-            ChatMessageStatus.user_id == user_id,
-            ChatMessage.author_id != user_id,
-            ChatMessageStatus.read_at.is_(None),
+async def sync_department_chats(db: AsyncSession) -> None:
+    departments_result = await db.execute(
+        select(Department).options(
+            selectinload(Department.employees).selectinload(Employee.user)
         )
     )
-    for item in statuses.scalars().all():
-        item.read_at = now
-        if item.delivered_at is None:
-            item.delivered_at = now
+    departments = list(departments_result.scalars().unique().all())
 
-    await db.commit()
+    existing_result = await db.execute(
+        select(Chat)
+        .options(*_chat_load_options())
+        .where(Chat.type == ChatType.department)
+    )
+    existing_by_department = {
+        chat.department_id: chat
+        for chat in existing_result.scalars().unique().all()
+        if chat.department_id is not None
+    }
 
+    for department in departments:
+        eligible_employees = [
+            employee
+            for employee in department.employees
+            if employee.user_id
+            and employee.user is not None
+            and employee.user.is_active
+        ]
 
-async def set_chat_pinned(db: AsyncSession, chat_id: UUID, user_id: UUID, value: bool) -> ChatReadState:
-    state = await ensure_chat_read_state(db, chat_id, user_id)
-    state.is_pinned = value
-    state.pinned_at = _now() if value else None
-    await db.commit()
-    await db.refresh(state)
-    return state
+        chat = existing_by_department.get(department.id)
+
+        if not eligible_employees:
+            if chat is not None:
+                for participant in list(chat.participants):
+                    await db.delete(participant)
+            continue
+
+        if chat is None:
+            chat = Chat(
+                type=ChatType.department,
+                department_id=department.id,
+                direct_key=None,
+            )
+            db.add(chat)
+            await db.flush()
+            chat = await _reload_chat(db, chat.id)
+            existing_by_department[department.id] = chat
+
+        target_user_ids = {
+            employee.user_id
+            for employee in eligible_employees
+            if employee.user_id
+        }
+        existing_user_ids = {
+            participant.user_id
+            for participant in chat.participants
+            if participant.user is not None
+            and participant.user.is_active
+            and getattr(participant.user, "employee", None) is not None
+        }
+
+        for user_id in target_user_ids - existing_user_ids:
+            db.add(ChatParticipant(chat_id=chat.id, user_id=user_id))
+            await db.flush()
+
+        removable = [
+            participant
+            for participant in list(chat.participants)
+            if (
+                participant.user_id not in target_user_ids
+                or participant.user is None
+                or not participant.user.is_active
+                or getattr(participant.user, "employee", None) is None
+            )
+        ]
+        for participant in removable:
+            await db.delete(participant)
+
+        for user_id in target_user_ids:
+            await ensure_chat_read_state(db, chat.id, user_id)
+
+    await db.flush()
 
 
 async def get_chat_for_user(db: AsyncSession, chat_id: UUID, user_id: UUID) -> Chat | None:
     stmt = (
         select(Chat)
-        .options(
-            selectinload(Chat.participants).selectinload(ChatParticipant.user).selectinload(User.employee),
-            selectinload(Chat.read_states),
-        )
+        .options(*_chat_load_options())
         .where(Chat.id == chat_id)
     )
     result = await db.execute(stmt)
     chat = result.scalar_one_or_none()
+
     if chat is None:
         return None
 
     if chat.type == ChatType.global_chat:
-        return chat
+        if await _user_has_active_employee(db, user_id):
+            return chat
+        return None
 
-    if any(item.user_id == user_id for item in chat.participants):
+    if any(
+        item.user_id == user_id
+        and item.user is not None
+        and item.user.is_active
+        and getattr(item.user, "employee", None) is not None
+        for item in chat.participants
+    ):
         return chat
 
     return None
 
 
 async def list_user_chats(db: AsyncSession, user_id: UUID) -> list[Chat]:
-    global_chat = await ensure_global_chat(db)
-    await ensure_global_participant(db, global_chat.id, user_id)
-    global_state = await ensure_chat_read_state(db, global_chat.id, user_id)
+    has_employee = await _user_has_active_employee(db, user_id)
 
-    if not global_state.is_pinned:
-        global_state.is_pinned = True
-        global_state.pinned_at = global_state.pinned_at or _now()
-        await db.flush()
+    await ensure_global_chat(db)
+    await sync_global_chat_participants(db)
+    await sync_department_chats(db)
 
-    stmt = (
-        select(Chat)
-        .options(
-            selectinload(Chat.participants).selectinload(ChatParticipant.user).selectinload(User.employee),
-            selectinload(Chat.read_states),
-            selectinload(Chat.messages).selectinload(ChatMessage.attachments),
+    if has_employee:
+        stmt = (
+            select(Chat)
+            .options(*_chat_load_options())
+            .where(
+                or_(
+                    Chat.type == ChatType.global_chat,
+                    and_(
+                        Chat.type == ChatType.direct,
+                        Chat.participants.any(ChatParticipant.user_id == user_id),
+                    ),
+                    and_(
+                        Chat.type == ChatType.department,
+                        Chat.participants.any(ChatParticipant.user_id == user_id),
+                    ),
+                )
+            )
+            .order_by(Chat.updated_at.desc())
         )
-        .where(
-            or_(
-                Chat.type == ChatType.global_chat,
+    else:
+        stmt = (
+            select(Chat)
+            .options(*_chat_load_options())
+            .where(
                 and_(
                     Chat.type == ChatType.direct,
                     Chat.participants.any(ChatParticipant.user_id == user_id),
-                ),
+                )
             )
+            .order_by(Chat.updated_at.desc())
         )
-    )
+
     result = await db.execute(stmt)
     chats = list(result.scalars().unique().all())
 
-    if not any(chat.id == global_chat.id for chat in chats):
-        chats.append(global_chat)
+    if has_employee:
+        global_chat = next((chat for chat in chats if chat.type == ChatType.global_chat), None)
+        if global_chat is not None:
+            await ensure_global_participant(db, global_chat.id, user_id)
 
-    def sort_key(chat: Chat):
-        state = next((item for item in chat.read_states if item.user_id == user_id), None)
-        is_global = chat.type == ChatType.global_chat
-        is_pinned = bool(state.is_pinned) if state else False
-        pinned_at = state.pinned_at if state and state.pinned_at else datetime.min.replace(tzinfo=timezone.utc)
-        last_message_at = get_last_message_at(chat) or datetime.min.replace(tzinfo=timezone.utc)
-        return (
-            0 if is_global else 1,
-            0 if is_pinned else 1,
-            -pinned_at.timestamp() if is_pinned else 0,
-            -last_message_at.timestamp(),
-        )
+    for chat in chats:
+        await ensure_chat_read_state(db, chat.id, user_id)
 
-    chats.sort(key=sort_key)
-    return chats
+    await db.flush()
+    result = await db.execute(stmt)
+    return list(result.scalars().unique().all())
 
 
 async def get_or_create_direct_chat(db: AsyncSession, current_user_id: UUID, other_user_id: UUID) -> Chat:
     if current_user_id == other_user_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot create direct chat with yourself")
 
-    user_exists = await db.execute(select(User.id).where(User.id == other_user_id))
-    if user_exists.scalar_one_or_none() is None:
+    other_user_result = await db.execute(
+        select(User)
+        .options(selectinload(User.employee))
+        .where(User.id == other_user_id)
+        .limit(1)
+    )
+    other_user = other_user_result.scalar_one_or_none()
+
+    if other_user is None or not other_user.is_active:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if getattr(other_user, "employee", None) is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User has no employee card")
+
+    current_user_result = await db.execute(
+        select(User)
+        .options(selectinload(User.employee))
+        .where(User.id == current_user_id)
+        .limit(1)
+    )
+    current_user = current_user_result.scalar_one_or_none()
+
+    if current_user is None or not current_user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Current user is inactive")
+
+    if getattr(current_user, "employee", None) is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current user has no employee card")
 
     first, second = sorted([str(current_user_id), str(other_user_id)])
     direct_key = f"{first}:{second}"
 
     result = await db.execute(
         select(Chat)
-        .options(
-            selectinload(Chat.participants).selectinload(ChatParticipant.user).selectinload(User.employee),
-            selectinload(Chat.read_states),
-        )
+        .options(*_chat_load_options())
         .where(Chat.direct_key == direct_key)
         .limit(1)
     )
     existing = result.scalar_one_or_none()
     if existing is not None:
-        await ensure_chat_read_state(db, existing.id, current_user_id)
-        await ensure_chat_read_state(db, existing.id, other_user_id)
         return existing
 
     chat = Chat(type=ChatType.direct, direct_key=direct_key, created_by=current_user_id)
@@ -296,15 +421,7 @@ async def get_or_create_direct_chat(db: AsyncSession, current_user_id: UUID, oth
     await ensure_chat_read_state(db, chat.id, other_user_id)
     await db.flush()
 
-    result = await db.execute(
-        select(Chat)
-        .options(
-            selectinload(Chat.participants).selectinload(ChatParticipant.user).selectinload(User.employee),
-            selectinload(Chat.read_states),
-        )
-        .where(Chat.id == chat.id)
-    )
-    return result.scalar_one()
+    return await _reload_chat(db, chat.id)
 
 
 async def get_messages(
@@ -313,21 +430,12 @@ async def get_messages(
     page: int = 1,
     size: int = 50,
 ) -> tuple[list[ChatMessage], int]:
-    chat_result = await db.execute(
-        select(Chat)
-        .options(selectinload(Chat.participants))
-        .where(Chat.id == chat_id)
-    )
-    chat = chat_result.scalar_one_or_none()
-    if chat is not None:
-        await ensure_message_statuses_for_chat(db, chat)
-
     count_stmt = select(func.count()).select_from(ChatMessage).where(ChatMessage.chat_id == chat_id)
 
     stmt = (
         select(ChatMessage)
         .options(
-            selectinload(ChatMessage.author),
+            selectinload(ChatMessage.author).selectinload(User.employee),
             selectinload(ChatMessage.attachments),
             selectinload(ChatMessage.statuses),
         )
@@ -346,7 +454,7 @@ async def get_message_by_id(db: AsyncSession, message_id: UUID) -> ChatMessage |
     result = await db.execute(
         select(ChatMessage)
         .options(
-            selectinload(ChatMessage.author),
+            selectinload(ChatMessage.author).selectinload(User.employee),
             selectinload(ChatMessage.attachments),
             selectinload(ChatMessage.statuses),
         )
@@ -362,6 +470,8 @@ async def get_attachment_by_id(db: AsyncSession, attachment_id: UUID) -> ChatAtt
             selectinload(ChatAttachment.message)
             .selectinload(ChatMessage.chat)
             .selectinload(Chat.participants)
+            .selectinload(ChatParticipant.user)
+            .selectinload(User.employee)
         )
         .where(ChatAttachment.id == attachment_id)
     )
@@ -370,7 +480,7 @@ async def get_attachment_by_id(db: AsyncSession, attachment_id: UUID) -> ChatAtt
 
 def resolve_attachment_disk_path(attachment: ChatAttachment) -> Path:
     if attachment.file_path.startswith("/uploads/"):
-        relative = attachment.file_path[len("/uploads/"):]
+        relative = attachment.file_path[len("/uploads/") :]
         return (_upload_root() / relative).resolve()
     return (_upload_root() / Path(attachment.file_path).name).resolve()
 
@@ -378,20 +488,25 @@ def resolve_attachment_disk_path(attachment: ChatAttachment) -> Path:
 def _resolve_attachment_type(content_type: str | None) -> tuple[ChatAttachmentType, str] | None:
     if content_type is None:
         return None
+
     if content_type in ALLOWED_IMAGE_TYPES:
         return ChatAttachmentType.image, ALLOWED_IMAGE_TYPES[content_type]
+
     if content_type in ALLOWED_DOCUMENT_TYPES:
         return ChatAttachmentType.document, ALLOWED_DOCUMENT_TYPES[content_type]
+
     return None
 
 
 def _safe_filename(filename: str | None, fallback_ext: str) -> str:
     if not filename:
         return f"file.{fallback_ext}"
+
     basename = Path(filename).name
     stem, _, ext = basename.rpartition(".")
     if not stem:
         stem = "file"
+
     stem = "".join(char for char in stem if char.isalnum() or char in {"-", "_", " "}).strip() or "file"
     ext = ext.lower() if ext else fallback_ext
     return f"{stem}.{ext}"
@@ -403,6 +518,7 @@ async def _store_attachments(
     files: Iterable[UploadFile],
 ) -> None:
     files = [item for item in files if item.filename]
+
     if not files:
         return
 
@@ -449,6 +565,28 @@ async def _store_attachments(
         )
 
 
+async def _create_message_statuses(db: AsyncSession, chat: Chat, message: ChatMessage) -> None:
+    delivered_at = _now()
+
+    for participant in chat.participants:
+        if participant.user_id == message.author_id:
+            continue
+        if participant.user is None or not participant.user.is_active:
+            continue
+        if getattr(participant.user, "employee", None) is None:
+            continue
+
+        db.add(
+            ChatMessageStatus(
+                message_id=message.id,
+                user_id=participant.user_id,
+                delivered_at=delivered_at,
+            )
+        )
+
+    await db.flush()
+
+
 async def create_message(
     db: AsyncSession,
     chat: Chat,
@@ -472,30 +610,12 @@ async def create_message(
 
     if files:
         await _store_attachments(db, message, files)
-        await db.flush()
 
-    now = _now()
-
-    for participant in chat.participants:
-        if participant.user_id == author_id:
-            continue
-        db.add(
-            ChatMessageStatus(
-                message_id=message.id,
-                user_id=participant.user_id,
-                delivered_at=now,
-            )
-        )
-
-    author_read_state = await ensure_chat_read_state(db, chat.id, author_id)
-    author_read_state.last_read_message_id = message.id
-    author_read_state.last_read_at = now
-
-    chat.updated_at = now
+    await _create_message_statuses(db, chat, message)
+    chat.updated_at = _now()
 
     await db.commit()
-    await db.refresh(message)
-    return message
+    return await get_message_by_id(db, message.id)  # type: ignore[return-value]
 
 
 async def soft_delete_message(
@@ -506,8 +626,7 @@ async def soft_delete_message(
     message.text = "[сообщение удалено]"
     message.is_pinned = False
     await db.commit()
-    await db.refresh(message)
-    return message
+    return await get_message_by_id(db, message.id)  # type: ignore[return-value]
 
 
 async def set_message_pinned(
@@ -517,76 +636,78 @@ async def set_message_pinned(
 ) -> ChatMessage:
     message.is_pinned = value
     await db.commit()
-    await db.refresh(message)
-    return message
+    return await get_message_by_id(db, message.id)  # type: ignore[return-value]
+
+
+async def set_chat_pinned(
+    db: AsyncSession,
+    chat_id: UUID,
+    user_id: UUID,
+    value: bool,
+) -> ChatReadState:
+    state = await ensure_chat_read_state(db, chat_id, user_id)
+    state.is_pinned = value
+    state.pinned_at = _now() if value else None
+    await db.commit()
+    await db.refresh(state)
+    return state
+
+
+async def mark_chat_as_read(db: AsyncSession, chat: Chat, user_id: UUID) -> None:
+    state = await ensure_chat_read_state(db, chat.id, user_id)
+
+    latest_result = await db.execute(
+        select(ChatMessage)
+        .where(ChatMessage.chat_id == chat.id)
+        .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
+        .limit(1)
+    )
+    latest_message = latest_result.scalar_one_or_none()
+
+    state.last_read_at = _now()
+    state.last_read_message_id = latest_message.id if latest_message else None
+
+    unread_result = await db.execute(
+        select(ChatMessageStatus)
+        .join(ChatMessage, ChatMessage.id == ChatMessageStatus.message_id)
+        .where(
+            ChatMessage.chat_id == chat.id,
+            ChatMessageStatus.user_id == user_id,
+            ChatMessage.author_id != user_id,
+            ChatMessageStatus.read_at.is_(None),
+        )
+    )
+    unread_statuses = list(unread_result.scalars().all())
+
+    now = _now()
+    for item in unread_statuses:
+        item.read_at = now
+
+    await db.commit()
 
 
 def build_chat_title(chat: Chat, current_user_id: UUID) -> str:
     if chat.type == ChatType.global_chat:
         return "Общий чат"
 
+    if chat.type == ChatType.department:
+        if chat.department is not None:
+            return chat.department.name
+        return "Чат отдела"
+
     for participant in chat.participants:
         if participant.user_id == current_user_id:
+            continue
+        if participant.user is None or not participant.user.is_active:
             continue
 
         employee: Employee | None = getattr(participant.user, "employee", None)
         if employee:
             parts = [employee.last_name, employee.first_name, employee.middle_name]
-            return " ".join(part for part in parts if part)
+            full_name = " ".join(part for part in parts if part)
+            if full_name:
+                return full_name
 
         return participant.user.username if participant.user else "Личный чат"
 
     return "Личный чат"
-
-
-def get_chat_unread_count(chat: Chat, current_user_id: UUID) -> int:
-    state = next((item for item in chat.read_states if item.user_id == current_user_id), None)
-    last_read_at = state.last_read_at if state else None
-
-    unread = 0
-    for message in getattr(chat, "messages", []) or []:
-        if message.author_id == current_user_id:
-            continue
-        if last_read_at is None or message.created_at > last_read_at:
-            unread += 1
-    return unread
-
-
-def get_last_message_preview(chat: Chat) -> str | None:
-    messages = getattr(chat, "messages", []) or []
-    if not messages:
-        return None
-
-    latest = max(messages, key=lambda item: item.created_at)
-    if latest.is_deleted:
-        return "Сообщение удалено"
-    if latest.text:
-        return latest.text
-    if latest.attachments:
-        return "Вложение"
-    return None
-
-
-def get_last_message_at(chat: Chat) -> datetime | None:
-    messages = getattr(chat, "messages", []) or []
-    if not messages:
-        return None
-    latest = max(messages, key=lambda item: item.created_at)
-    return latest.created_at
-
-
-def get_my_message_status(message: ChatMessage, current_user_id: UUID):
-    if message.author_id != current_user_id:
-        return None
-
-    statuses = getattr(message, "statuses", []) or []
-    if not statuses:
-        return {"delivered_at": None, "read_at": None}
-
-    delivered_candidates = [item.delivered_at for item in statuses if item.delivered_at]
-    read_candidates = [item.read_at for item in statuses if item.read_at]
-
-    return {
-        "delivered_at": max(delivered_candidates) if delivered_candidates else None,
-        "read_at": max(read_candidates) if read_candidates else None,
-    }

@@ -1,8 +1,10 @@
-from uuid import UUID
+from pathlib import Path
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user, require_it
 from app.knowledge.schemas import (
@@ -10,6 +12,7 @@ from app.knowledge.schemas import (
     ArticleListResponse,
     ArticleRead,
     ArticleUpdate,
+    KnowledgeAttachmentRead,
     KnowledgeCategoryCreate,
     KnowledgeCategoryRead,
     KnowledgeCategoryUpdate,
@@ -30,18 +33,41 @@ from app.users.models import User
 
 router = APIRouter()
 
+ALLOWED_KNOWLEDGE_IMAGE_TYPES = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+}
+MAX_KNOWLEDGE_IMAGE_SIZE = 10 * 1024 * 1024
+
+
+def _attachment_to_read(attachment) -> KnowledgeAttachmentRead:
+    return KnowledgeAttachmentRead(
+        id=attachment.id,
+        article_id=attachment.article_id,
+        filename=attachment.filename,
+        file_path=attachment.file_path,
+        file_url=attachment.file_path,
+        file_size=attachment.file_size,
+        content_type=attachment.content_type,
+        uploaded_at=attachment.uploaded_at,
+    )
+
 
 def _article_to_read(article) -> ArticleRead:
     return ArticleRead(
         id=article.id,
         title=article.title,
-        content=article.content,
+        content_html=article.content_html,
+        content_text=article.content_text,
         category_id=article.category_id,
         category_name=article.category.name if article.category else None,
         author_id=article.author_id,
         author_name=article.author.username if article.author else None,
         created_at=article.created_at,
         updated_at=article.updated_at,
+        attachments=[_attachment_to_read(item) for item in getattr(article, "attachments", [])],
     )
 
 
@@ -171,3 +197,40 @@ async def remove_article(
     if article is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Article not found")
     await delete_article(db, article)
+
+
+@router.post("/articles/images", status_code=status.HTTP_201_CREATED)
+async def upload_article_image(
+    file: UploadFile = File(...),
+    _: User = Depends(require_it),
+):
+    content_type = file.content_type or ""
+    ext = ALLOWED_KNOWLEDGE_IMAGE_TYPES.get(content_type)
+    if ext is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported image type",
+        )
+
+    content = await file.read()
+    await file.close()
+
+    if len(content) > MAX_KNOWLEDGE_IMAGE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Image exceeds 10 MB",
+        )
+
+    upload_root = Path(settings.upload_dir).expanduser().resolve()
+    images_dir = upload_root / "knowledge_images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_name = Path(file.filename or f"image.{ext}").name
+    generated_name = f"{uuid4().hex}_{safe_name}"
+    disk_path = images_dir / generated_name
+    disk_path.write_bytes(content)
+
+    return {
+        "url": f"/uploads/knowledge_images/{generated_name}",
+        "filename": file.filename or generated_name,
+    }
