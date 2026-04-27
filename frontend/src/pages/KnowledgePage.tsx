@@ -32,6 +32,7 @@ import { cn, formatDateTime } from "@/lib/utils"
 
 export default function KnowledgePage() {
   const { hasRole } = useAuthStore()
+
   const canManage = useMemo(
     () => hasRole("admin") || hasRole("it_specialist"),
     [hasRole]
@@ -56,8 +57,11 @@ export default function KnowledgePage() {
   const [articleError, setArticleError] = useState<string | null>(null)
 
   const [newCategoryName, setNewCategoryName] = useState("")
+  const [newCategoryVisibleForUsers, setNewCategoryVisibleForUsers] = useState(false)
+
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
   const [editingCategoryName, setEditingCategoryName] = useState("")
+  const [editingCategoryVisibleForUsers, setEditingCategoryVisibleForUsers] = useState(false)
 
   const [articleTitle, setArticleTitle] = useState("")
   const [articleCategoryId, setArticleCategoryId] = useState("")
@@ -72,6 +76,10 @@ export default function KnowledgePage() {
 
     if (!articleCategoryId && data.length > 0) {
       setArticleCategoryId(data[0].id)
+    }
+
+    if (selectedCategory && !data.some((item) => item.id === selectedCategory)) {
+      setSelectedCategory(undefined)
     }
   }
 
@@ -109,6 +117,17 @@ export default function KnowledgePage() {
     })
   }, [selectedCategory, search])
 
+  function resetCategoryForm() {
+    setShowCreateCategoryForm(false)
+    setNewCategoryName("")
+    setNewCategoryVisibleForUsers(false)
+    setEditingCategoryId(null)
+    setEditingCategoryName("")
+    setEditingCategoryVisibleForUsers(false)
+    setCategoryError(null)
+    setUpdatingCategoryId(null)
+  }
+
   function resetArticleForm() {
     setShowCreateArticleForm(false)
     setEditingArticleId(null)
@@ -139,10 +158,12 @@ export default function KnowledgePage() {
       const created = await createKnowledgeCategory({
         name: newCategoryName.trim(),
         sort_order: 0,
+        is_user_visible: newCategoryVisibleForUsers,
       })
 
       setCategories((prev) => [...prev, created])
       setNewCategoryName("")
+      setNewCategoryVisibleForUsers(false)
       setShowCreateCategoryForm(false)
 
       if (!articleCategoryId) {
@@ -159,6 +180,8 @@ export default function KnowledgePage() {
   function startEditCategory(category: KnowledgeCategory) {
     setEditingCategoryId(category.id)
     setEditingCategoryName(category.name)
+    setEditingCategoryVisibleForUsers(Boolean(category.is_user_visible))
+    setCategoryError(null)
   }
 
   async function handleUpdateCategory(e: React.FormEvent) {
@@ -172,6 +195,7 @@ export default function KnowledgePage() {
     try {
       const updated = await updateKnowledgeCategory(editingCategoryId, {
         name: editingCategoryName.trim(),
+        is_user_visible: editingCategoryVisibleForUsers,
       })
 
       setCategories((prev) =>
@@ -180,6 +204,7 @@ export default function KnowledgePage() {
 
       setEditingCategoryId(null)
       setEditingCategoryName("")
+      setEditingCategoryVisibleForUsers(false)
     } catch (e) {
       console.error("UPDATE CATEGORY ERROR:", e)
       setCategoryError("Не удалось обновить категорию")
@@ -315,9 +340,14 @@ export default function KnowledgePage() {
             {canManage && (
               <button
                 onClick={() => {
-                  setShowCreateCategoryForm((p) => !p)
-                  setEditingCategoryId(null)
-                  setEditingCategoryName("")
+                  if (showCreateCategoryForm || editingCategoryId) {
+                    resetCategoryForm()
+                  } else {
+                    setShowCreateCategoryForm(true)
+                    setEditingCategoryId(null)
+                    setEditingCategoryName("")
+                    setEditingCategoryVisibleForUsers(false)
+                  }
                 }}
                 className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition hover:bg-accent"
               >
@@ -355,6 +385,15 @@ export default function KnowledgePage() {
                   onChange={(e) => setNewCategoryName(e.target.value)}
                   className="portal-input w-full rounded-xl px-3 py-2.5 text-sm outline-none"
                 />
+
+                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={newCategoryVisibleForUsers}
+                    onChange={(e) => setNewCategoryVisibleForUsers(e.target.checked)}
+                  />
+                  Видна обычным сотрудникам
+                </label>
 
                 {categoryError && (
                   <p className="text-sm text-red-500">{categoryError}</p>
@@ -400,6 +439,18 @@ export default function KnowledgePage() {
                         onChange={(e) => setEditingCategoryName(e.target.value)}
                         className="portal-input w-full rounded-xl px-3 py-2 text-sm outline-none"
                       />
+
+                      <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={editingCategoryVisibleForUsers}
+                          onChange={(e) =>
+                            setEditingCategoryVisibleForUsers(e.target.checked)
+                          }
+                        />
+                        Видна обычным сотрудникам
+                      </label>
+
                       <div className="flex gap-2">
                         <button
                           type="submit"
@@ -413,6 +464,7 @@ export default function KnowledgePage() {
                           onClick={() => {
                             setEditingCategoryId(null)
                             setEditingCategoryName("")
+                            setEditingCategoryVisibleForUsers(false)
                           }}
                           className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium"
                         >

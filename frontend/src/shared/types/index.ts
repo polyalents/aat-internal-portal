@@ -1,4 +1,3 @@
-// === Auth ===
 export interface LoginRequest {
   username: string
   password: string
@@ -10,7 +9,6 @@ export interface TokenResponse {
   token_type: string
 }
 
-// === User ===
 export type UserRole = "employee" | "it_specialist" | "admin"
 
 export interface User {
@@ -45,7 +43,6 @@ export interface UserPasswordChange {
   password: string
 }
 
-// === Department ===
 export interface Department {
   id: string
   name: string
@@ -54,7 +51,6 @@ export interface Department {
   created_at: string
 }
 
-// === Employee ===
 export interface Employee {
   id: string
   user_id: string | null
@@ -108,7 +104,6 @@ export interface BirthdayEntry {
   photo_url: string | null
 }
 
-// === Tickets ===
 export type TicketStatus =
   | "new"
   | "in_progress"
@@ -211,7 +206,6 @@ export interface TicketAssigneeOption {
   is_available: boolean
 }
 
-// === Announcements ===
 export interface Announcement {
   id: string
   title: string
@@ -223,11 +217,11 @@ export interface Announcement {
   is_active: boolean
 }
 
-// === Knowledge ===
 export interface KnowledgeCategory {
   id: string
   name: string
   sort_order: number
+  is_user_visible: boolean
 }
 
 export interface KnowledgeAttachment {
@@ -269,7 +263,6 @@ export interface KnowledgeArticleUpdate {
   content_text?: string
 }
 
-// === Chat ===
 export type ChatType = "global" | "direct" | "department"
 export type ChatAttachmentType = "image" | "document"
 
@@ -325,7 +318,6 @@ export interface ChatMessage {
   statuses: ChatMessageStatus[]
 }
 
-// === Dashboard ===
 export interface Dashboard {
   ticket_stats: TicketStats
   recent_tickets: Ticket[]
@@ -337,7 +329,6 @@ export interface Dashboard {
   assigned_tickets: Ticket[]
 }
 
-// === Pagination ===
 export interface PaginatedResponse<T> {
   items: T[]
   total: number
@@ -345,7 +336,6 @@ export interface PaginatedResponse<T> {
   size: number
 }
 
-// === Settings ===
 export interface SystemSetting {
   key: string
   value: string

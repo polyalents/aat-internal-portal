@@ -130,25 +130,25 @@ export default function AdminDepartmentsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {error && <Alert tone="error">{error}</Alert>}
       {info && <Alert tone="success">{info}</Alert>}
 
       <section className="rounded-2xl border border-border bg-card">
-        <div className="border-b border-border bg-muted/25 px-5 py-4">
+        <div className="border-b border-border bg-muted/25 px-4 py-4 sm:px-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400">
-              <Building2 className="h-5 w-5" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400 sm:h-10 sm:w-10">
+              <Building2 className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h2 className="text-base font-semibold">Отделы</h2>
               <p className="text-sm text-muted-foreground">Создание, редактирование и удаление отделов.</p>
             </div>
           </div>
         </div>
 
-        <div className="px-5 py-5">
-          <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
+        <div className="px-4 py-4 sm:px-5 sm:py-5">
+          <div className="rounded-2xl border border-border/60 bg-muted/20 p-3 sm:p-4">
             <div className="mb-4 flex items-center gap-2">
               <Plus className="h-4 w-4 text-primary" />
               <h3 className="text-sm font-semibold">Создать отдел</h3>
@@ -163,16 +163,20 @@ export default function AdminDepartmentsPage() {
               >
                 <option value="">Руководитель не назначен</option>
                 {employees.map((employee) => (
-                  <option key={employee.id} value={employee.id}>{employee.full_name}</option>
+                  <option key={employee.id} value={employee.id}>
+                    {employee.full_name}
+                  </option>
                 ))}
               </select>
-              <Button onClick={() => void handleCreate()}>Создать</Button>
+              <Button className="w-full md:w-auto" onClick={() => void handleCreate()}>
+                Создать
+              </Button>
             </div>
           </div>
 
-          <div className="mt-5 overflow-hidden rounded-2xl border border-border/60">
+          <div className="mt-5 hidden md:block overflow-hidden rounded-2xl border border-border/60">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-sm">
+              <table className="w-full text-sm">
                 <thead className="bg-muted/30 text-left">
                   <tr>
                     <th className="px-4 py-3 font-medium">Название</th>
@@ -202,7 +206,9 @@ export default function AdminDepartmentsPage() {
                             >
                               <option value="">Руководитель не назначен</option>
                               {employees.map((employee) => (
-                                <option key={employee.id} value={employee.id}>{employee.full_name}</option>
+                                <option key={employee.id} value={employee.id}>
+                                  {employee.full_name}
+                                </option>
                               ))}
                             </select>
                           ) : (
@@ -243,6 +249,68 @@ export default function AdminDepartmentsPage() {
               <div className="px-4 py-8 text-center text-sm text-muted-foreground">Отделы пока не созданы.</div>
             )}
           </div>
+
+          <div className="mt-5 grid gap-3 md:hidden">
+            {departments.map((department) => {
+              const isEditing = editingId === department.id
+
+              return (
+                <article key={department.id} className="rounded-2xl border border-border/60 bg-muted/15 p-4">
+                  {isEditing ? (
+                    <div className="space-y-3">
+                      <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+                      <select
+                        className="admin-input h-10 w-full rounded-md px-3 text-sm"
+                        value={editHeadId}
+                        onChange={(e) => setEditHeadId(e.target.value)}
+                      >
+                        <option value="">Руководитель не назначен</option>
+                        {employees.map((employee) => (
+                          <option key={employee.id} value={employee.id}>
+                            {employee.full_name}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="grid grid-cols-1 gap-2 xs:grid-cols-2">
+                        <Button size="sm" onClick={() => void handleSave(department.id)}>
+                          Сохранить
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={cancelEdit}>
+                          Отмена
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <h4 className="font-semibold">{department.name}</h4>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Руководитель: {renderHeadName(department.head_id)}
+                        </p>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-1 gap-2 xs:grid-cols-2">
+                        <Button size="sm" onClick={() => startEdit(department)}>
+                          <Pencil className="mr-1 h-3.5 w-3.5" />
+                          Редактировать
+                        </Button>
+                        <Button size="sm" variant="destructive" onClick={() => void handleDelete(department)}>
+                          <Trash2 className="mr-1 h-3.5 w-3.5" />
+                          Удалить
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </article>
+              )
+            })}
+
+            {departments.length === 0 && (
+              <div className="rounded-2xl border border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
+                Отделы пока не созданы.
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
@@ -276,6 +344,11 @@ export default function AdminDepartmentsPage() {
           border-color: rgb(56 189 248);
           background: rgb(35 46 66);
           box-shadow: 0 0 0 3px rgb(56 189 248 / .2);
+        }
+        @media (min-width: 480px) {
+          .xs\\:grid-cols-2 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
         }
       `}</style>
     </div>

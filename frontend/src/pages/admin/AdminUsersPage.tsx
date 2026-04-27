@@ -8,11 +8,12 @@ import {
   createAdminUser,
   deactivateAdminUser,
   deleteAdminUser,
+  getAdminEmployees,
   getAdminUsers,
   restoreAdminUser,
   updateAdminUser,
 } from "@/features/admin/api"
-import type { User, UserRole } from "@/shared/types"
+import type { Employee, User, UserRole } from "@/shared/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
@@ -29,6 +30,7 @@ export default function AdminUsersPage() {
   const navigate = useNavigate()
 
   const [users, setUsers] = useState<User[]>([])
+  const [employees, setEmployees] = useState<Employee[]>([])
   const [search, setSearch] = useState("")
   const [mode, setMode] = useState<Mode>("active")
   const [loading, setLoading] = useState(true)
@@ -45,13 +47,22 @@ export default function AdminUsersPage() {
     setError(null)
 
     try {
-      const data = await getAdminUsers({
-        page: 1,
-        size: 100,
-        search: query || undefined,
-        is_active: nextMode === "active",
-      })
-      setUsers(data.items)
+      const [usersData, employeesData] = await Promise.all([
+        getAdminUsers({
+          page: 1,
+          size: 100,
+          search: query || undefined,
+          is_active: nextMode === "active",
+        }),
+        getAdminEmployees({
+          page: 1,
+          size: 100,
+          is_active: true,
+        }),
+      ])
+
+      setUsers(usersData.items)
+      setEmployees(employeesData.items)
     } catch {
       setError("Не удалось загрузить учётные записи")
     } finally {
@@ -72,6 +83,16 @@ export default function AdminUsersPage() {
     }),
     [users]
   )
+
+  const employeeNameByUserId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const employee of employees) {
+      if (employee.user_id) {
+        map.set(employee.user_id, employee.full_name)
+      }
+    }
+    return map
+  }, [employees])
 
   async function handleCreate() {
     if (!username || !email || !password) {
@@ -202,15 +223,15 @@ export default function AdminUsersPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <section className="rounded-2xl border border-border bg-card">
-        <div className="border-b border-border bg-muted/25 px-5 py-4">
+        <div className="border-b border-border bg-muted/25 px-4 py-4 sm:px-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400">
-                <Shield className="h-5 w-5" />
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400 sm:h-10 sm:w-10">
+                <Shield className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <h2 className="text-base font-semibold">Учётные записи</h2>
                 <p className="text-sm text-muted-foreground">
                   Деактивируйте учётные записи с историей данных, удаляйте только неиспользуемые.
@@ -218,7 +239,7 @@ export default function AdminUsersPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
               <Button variant={mode === "active" ? "default" : "outline"} onClick={() => setMode("active")}>
                 Активные
               </Button>
@@ -229,24 +250,24 @@ export default function AdminUsersPage() {
           </div>
         </div>
 
-        <div className="grid gap-3 border-b border-border px-5 py-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 border-b border-border px-4 py-4 sm:grid-cols-2 sm:px-5 xl:grid-cols-4">
           <StatCard icon={<Users className="h-4 w-4" />} label="Всего" value={stats.total} />
           <StatCard icon={<UserCog className="h-4 w-4" />} label="IT-специалистов" value={stats.it} />
           <StatCard icon={<Shield className="h-4 w-4" />} label="Администраторов" value={stats.admins} />
           <StatCard icon={<KeyRound className="h-4 w-4" />} label="IT-менеджеров" value={stats.managers} />
         </div>
 
-        <div className="px-5 py-5">
+        <div className="px-4 py-4 sm:px-5 sm:py-5">
           {error && <Alert tone="error">{error}</Alert>}
           {info && <Alert tone="success">{info}</Alert>}
 
-          <div className="mt-4 rounded-2xl border border-border/60 bg-muted/20 p-4">
+          <div className="mt-4 rounded-2xl border border-border/60 bg-muted/20 p-3 sm:p-4">
             <div className="mb-3 flex items-center gap-2">
               <Plus className="h-4 w-4 text-primary" />
               <h3 className="text-sm font-semibold">Создать учётную запись</h3>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-5">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
               <Input placeholder="Логин" value={username} onChange={(e) => setUsername(e.target.value)} />
               <Input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
               <Input type="password" placeholder="Пароль" value={password} onChange={(e) => setPassword(e.target.value)} />
@@ -256,44 +277,50 @@ export default function AdminUsersPage() {
                 onChange={(e) => setRole(e.target.value as UserRole)}
               >
                 {ROLES.map((r) => (
-                  <option key={r.value} value={r.value}>{r.label}</option>
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
                 ))}
               </select>
-              <Button onClick={() => void handleCreate()}>Создать</Button>
+              <Button className="w-full xl:w-auto" onClick={() => void handleCreate()}>
+                Создать
+              </Button>
             </div>
           </div>
 
-          <div className="mt-5 flex flex-wrap gap-2">
-            <div className="relative min-w-72 flex-1">
+          <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+            <div className="relative w-full sm:min-w-72 sm:flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 className="pl-9"
-                placeholder="Поиск по логину или email"
+                placeholder="Поиск по логину"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <Button variant="outline" onClick={() => void loadUsers(search)}>Найти</Button>
+            <Button className="w-full sm:w-auto" variant="outline" onClick={() => void loadUsers(search)}>
+              Найти
+            </Button>
           </div>
 
-          <div className="mt-5 overflow-hidden rounded-2xl border border-border/60">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[980px] text-sm">
-                <thead className="bg-muted/30 text-left">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Логин</th>
-                    <th className="px-4 py-3 font-medium">Email</th>
-                    <th className="px-4 py-3 font-medium">Роль</th>
-                    <th className="px-4 py-3 font-medium">IT-менеджер</th>
-                    <th className="px-4 py-3 font-medium">Связь с сотрудником</th>
-                    <th className="px-4 py-3 font-medium">Действия</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((user) => (
+          <div className="mt-5 hidden xl:block overflow-hidden rounded-2xl border border-border/60">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/30 text-left">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Логин</th>
+                  <th className="px-4 py-3 font-medium">Роль</th>
+                  <th className="px-4 py-3 font-medium">IT-менеджер</th>
+                  <th className="px-4 py-3 font-medium">Связь с сотрудником</th>
+                  <th className="px-4 py-3 font-medium">Действия</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((user) => {
+                  const employeeName = employeeNameByUserId.get(user.id)
+
+                  return (
                     <tr key={user.id} className="border-t border-border/60 align-top">
                       <td className="px-4 py-3 font-medium">{user.username}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{user.email}</td>
                       <td className="px-4 py-3">
                         <select
                           className="admin-input h-9 rounded-md px-2.5 text-sm"
@@ -301,7 +328,9 @@ export default function AdminUsersPage() {
                           onChange={(e) => void handleRoleChange(user, e.target.value as UserRole)}
                         >
                           {ROLES.map((r) => (
-                            <option key={r.value} value={r.value}>{r.label}</option>
+                            <option key={r.value} value={r.value}>
+                              {r.label}
+                            </option>
                           ))}
                         </select>
                       </td>
@@ -317,21 +346,20 @@ export default function AdminUsersPage() {
                         </label>
                       </td>
                       <td className="px-4 py-3">
-                        <span
-                          className={cn(
-                            "inline-flex rounded-full px-2.5 py-1 text-xs font-medium",
-                            user.employee_id
-                              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
-                              : "bg-muted text-muted-foreground"
-                          )}
-                        >
-                          {user.employee_id ? "Привязана" : "Не привязана"}
-                        </span>
+                        {employeeName ? (
+                          <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                            {employeeName}
+                          </span>
+                        ) : (
+                          <span className="inline-flex rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                            Не привязана
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-2">
                           <Button variant="outline" size="sm" onClick={() => void handlePasswordChange(user)}>
-                            Сменить пароль
+                            Пароль
                           </Button>
                           {mode === "active" ? (
                             <Button variant="secondary" size="sm" onClick={() => void handleDeactivate(user)}>
@@ -348,13 +376,91 @@ export default function AdminUsersPage() {
                         </div>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  )
+                })}
+              </tbody>
+            </table>
 
             {!loading && users.length === 0 && (
               <div className="px-4 py-8 text-center text-sm text-muted-foreground">Данные не найдены.</div>
+            )}
+          </div>
+
+          <div className="mt-5 grid gap-3 xl:hidden">
+            {users.map((user) => {
+              const employeeName = employeeNameByUserId.get(user.id)
+
+              return (
+                <article key={user.id} className="rounded-2xl border border-border/60 bg-muted/15 p-4">
+                  <div className="flex flex-col gap-3 xs:flex-row xs:items-start xs:justify-between">
+                    <div className="min-w-0">
+                      <h4 className="truncate font-semibold">{user.username}</h4>
+                      <p className="mt-1 text-sm text-muted-foreground">{employeeName || "Не привязана"}</p>
+                    </div>
+
+                    <span
+                      className={cn(
+                        "w-fit shrink-0 rounded-full px-2.5 py-1 text-xs font-medium",
+                        user.role === "admin"
+                          ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300"
+                          : user.role === "it_specialist"
+                            ? "bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300"
+                            : "bg-muted text-muted-foreground"
+                      )}
+                    >
+                      {ROLES.find((r) => r.value === user.role)?.label}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <select
+                      className="admin-input h-10 rounded-md px-3 text-sm"
+                      value={user.role}
+                      onChange={(e) => void handleRoleChange(user, e.target.value as UserRole)}
+                    >
+                      {ROLES.map((r) => (
+                        <option key={r.value} value={r.value}>
+                          {r.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    <label className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={user.is_it_manager}
+                        disabled={user.role === "employee"}
+                        onChange={() => void handleManagerToggle(user)}
+                      />
+                      <span className="text-muted-foreground">IT-менеджер</span>
+                    </label>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <Button variant="outline" size="sm" onClick={() => void handlePasswordChange(user)}>
+                      Сменить пароль
+                    </Button>
+                    {mode === "active" ? (
+                      <Button variant="secondary" size="sm" onClick={() => void handleDeactivate(user)}>
+                        Деактивировать
+                      </Button>
+                    ) : (
+                      <Button variant="default" size="sm" onClick={() => void handleRestore(user)}>
+                        Восстановить
+                      </Button>
+                    )}
+                    <Button className="sm:col-span-2" variant="destructive" size="sm" onClick={() => void handleDelete(user)}>
+                      Удалить
+                    </Button>
+                  </div>
+                </article>
+              )
+            })}
+
+            {!loading && users.length === 0 && (
+              <div className="rounded-2xl border border-border/60 px-4 py-8 text-center text-sm text-muted-foreground">
+                Данные не найдены.
+              </div>
             )}
           </div>
         </div>
@@ -390,6 +496,17 @@ export default function AdminUsersPage() {
           border-color: rgb(56 189 248);
           background: rgb(35 46 66);
           box-shadow: 0 0 0 3px rgb(56 189 248 / .2);
+        }
+        @media (min-width: 480px) {
+          .xs\\:flex-row {
+            flex-direction: row;
+          }
+          .xs\\:items-start {
+            align-items: flex-start;
+          }
+          .xs\\:justify-between {
+            justify-content: space-between;
+          }
         }
       `}</style>
     </div>

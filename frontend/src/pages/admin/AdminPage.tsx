@@ -11,16 +11,16 @@ const tabs = [
 
 export default function AdminPage() {
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pb-12">
-      <section className="admin-hero relative overflow-hidden rounded-[2rem] border border-border/80 bg-card/95">
-        <div className="relative z-10 px-6 py-6 sm:px-8 sm:py-7">
+    <div className="mx-auto max-w-6xl space-y-4 px-3 pb-8 sm:space-y-6 sm:px-4 sm:pb-12">
+      <section className="admin-hero relative overflow-hidden rounded-[1.5rem] border border-border/80 bg-card/95 sm:rounded-[2rem]">
+        <div className="relative z-10 px-4 py-5 sm:px-8 sm:py-7">
           <div className="max-w-3xl">
-            <p className="text-sm font-medium text-muted-foreground">Системные настройки доступа</p>
-            <h1 className="mt-2 flex items-center gap-3 text-2xl font-semibold leading-tight tracking-tight text-foreground sm:text-[2rem]">
-              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400">
-                <Settings2 className="h-5 w-5" />
+            <p className="text-xs font-medium text-muted-foreground sm:text-sm">Системные настройки доступа</p>
+            <h1 className="mt-2 flex items-center gap-3 text-xl font-semibold leading-tight tracking-tight text-foreground sm:text-[2rem]">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400 sm:h-10 sm:w-10">
+                <Settings2 className="h-4 w-4 sm:h-5 sm:w-5" />
               </span>
-              Администрирование
+              <span className="min-w-0">Администрирование</span>
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-[15px]">
               Управление учётными записями, карточками сотрудников и отделами.
@@ -28,13 +28,13 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-indigo-500/[0.07] blur-3xl dark:bg-sky-500/[0.08]" />
-        <div className="pointer-events-none absolute -bottom-16 -left-16 h-44 w-44 rounded-full bg-sky-500/[0.06] blur-3xl dark:bg-indigo-500/[0.06]" />
+        <div className="pointer-events-none absolute -right-20 -top-20 h-40 w-40 rounded-full bg-indigo-500/[0.07] blur-3xl sm:h-56 sm:w-56 dark:bg-sky-500/[0.08]" />
+        <div className="pointer-events-none absolute -bottom-16 -left-16 h-32 w-32 rounded-full bg-sky-500/[0.06] blur-3xl sm:h-44 sm:w-44 dark:bg-indigo-500/[0.06]" />
       </section>
 
       <div className="admin-card overflow-hidden rounded-2xl border border-border bg-card">
-        <div className="border-b border-border bg-muted/25 px-4 py-4 sm:px-5">
-          <div className="flex flex-wrap gap-2">
+        <div className="border-b border-border bg-muted/25 px-3 py-3 sm:px-5 sm:py-4">
+          <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
             {tabs.map((tab) => {
               const Icon = tab.icon
               return (
@@ -43,29 +43,28 @@ export default function AdminPage() {
                   to={tab.to}
                   className={({ isActive }) =>
                     cn(
-                      "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition",
+                      "inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition sm:justify-start",
                       isActive
                         ? "border-primary/20 bg-primary text-primary-foreground"
                         : "border-border bg-background text-foreground hover:bg-accent"
                     )
                   }
                 >
-                  <Icon className="h-4 w-4" />
-                  {tab.label}
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{tab.label}</span>
                 </NavLink>
               )
             })}
           </div>
         </div>
 
-        <div className="px-4 py-5 sm:px-5">
+        <div className="px-3 py-4 sm:px-5 sm:py-5">
           <Outlet />
         </div>
       </div>
 
       <style>{`
         .admin-hero {
-          border-radius: 2rem;
           border: 1px solid hsl(var(--border));
           background:
             radial-gradient(circle at top right, rgb(99 102 241 / 0.08), transparent 30%),

@@ -8,6 +8,7 @@ class KnowledgeCategoryRead(BaseModel):
     id: UUID
     name: str
     sort_order: int
+    is_user_visible: bool
 
     model_config = {"from_attributes": True}
 
@@ -15,11 +16,13 @@ class KnowledgeCategoryRead(BaseModel):
 class KnowledgeCategoryCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     sort_order: int = 0
+    is_user_visible: bool = False
 
 
 class KnowledgeCategoryUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
     sort_order: int | None = None
+    is_user_visible: bool | None = None
 
 
 class KnowledgeAttachmentRead(BaseModel):

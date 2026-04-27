@@ -21,11 +21,13 @@ export interface KnowledgeArticleListResponse extends PaginatedResponse<Knowledg
 export interface KnowledgeCategoryCreate {
   name: string
   sort_order?: number
+  is_user_visible?: boolean
 }
 
 export interface KnowledgeCategoryUpdate {
   name?: string
   sort_order?: number
+  is_user_visible?: boolean
 }
 
 export interface KnowledgeArticlePayload {
@@ -45,7 +47,9 @@ export async function getKnowledgeCategories(): Promise<KnowledgeCategory[]> {
   return data
 }
 
-export async function createKnowledgeCategory(payload: KnowledgeCategoryCreate): Promise<KnowledgeCategory> {
+export async function createKnowledgeCategory(
+  payload: KnowledgeCategoryCreate
+): Promise<KnowledgeCategory> {
   const { data } = await api.post<KnowledgeCategory>("/knowledge/categories", payload)
   return data
 }
@@ -96,11 +100,11 @@ export async function deleteKnowledgeArticle(id: string): Promise<void> {
 
 export async function uploadKnowledgeImage(
   file: File
-): Promise<{ url: string; filename: string }> {
+): Promise<UploadKnowledgeImageResponse> {
   const formData = new FormData()
   formData.append("file", file)
 
-  const { data } = await api.post("/knowledge/articles/images", formData, {
+  const { data } = await api.post<UploadKnowledgeImageResponse>("/knowledge/articles/images", formData, {
     headers: {
       "Content-Type": "multipart/form-data",
     },

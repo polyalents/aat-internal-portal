@@ -158,17 +158,11 @@ export default function AdminEmployeesPage() {
     return users.filter((u) => !u.employee_id || u.id === employee.user_id)
   }
 
-  function handleCreateFormChange<K extends keyof EmployeeFormState>(
-    key: K,
-    value: EmployeeFormState[K]
-  ) {
+  function handleCreateFormChange<K extends keyof EmployeeFormState>(key: K, value: EmployeeFormState[K]) {
     setCreateForm((prev) => ({ ...prev, [key]: value }))
   }
 
-  function handleEditFormChange<K extends keyof EmployeeFormState>(
-    key: K,
-    value: EmployeeFormState[K]
-  ) {
+  function handleEditFormChange<K extends keyof EmployeeFormState>(key: K, value: EmployeeFormState[K]) {
     setEditForm((prev) => ({ ...prev, [key]: value }))
   }
 
@@ -263,25 +257,25 @@ export default function AdminEmployeesPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {error && <Alert tone="error">{error}</Alert>}
       {info && <Alert tone="success">{info}</Alert>}
 
       <section className="rounded-2xl border border-border bg-card">
-        <div className="border-b border-border bg-muted/25 px-5 py-4">
+        <div className="border-b border-border bg-muted/25 px-4 py-4 sm:px-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400">
-              <UserSquare2 className="h-5 w-5" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400 sm:h-10 sm:w-10">
+              <UserSquare2 className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h2 className="text-base font-semibold">Карточки сотрудников</h2>
               <p className="text-sm text-muted-foreground">Создание и редактирование карточек сотрудников.</p>
             </div>
           </div>
         </div>
 
-        <div className="px-5 py-5">
-          <div className="rounded-2xl border border-border/60 bg-muted/20 p-4">
+        <div className="px-4 py-4 sm:px-5 sm:py-5">
+          <div className="rounded-2xl border border-border/60 bg-muted/20 p-3 sm:p-4">
             <div className="mb-4 flex items-center gap-2">
               <Plus className="h-4 w-4 text-primary" />
               <h3 className="text-sm font-semibold">Новая карточка сотрудника</h3>
@@ -317,7 +311,6 @@ export default function AdminEmployeesPage() {
                 Конец отпуска
                 <Input className="mt-1" type="date" value={createForm.vacation_end} onChange={(e) => handleCreateFormChange("vacation_end", e.target.value)} />
               </label>
-              <div />
             </div>
 
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -328,7 +321,9 @@ export default function AdminEmployeesPage() {
               >
                 <option value="">Отдел не выбран</option>
                 {departments.map((department) => (
-                  <option key={department.id} value={department.id}>{department.name}</option>
+                  <option key={department.id} value={department.id}>
+                    {department.name}
+                  </option>
                 ))}
               </select>
 
@@ -339,7 +334,9 @@ export default function AdminEmployeesPage() {
               >
                 <option value="">Учётная запись не привязана</option>
                 {availableUsersForEmployee(null).map((user) => (
-                  <option key={user.id} value={user.id}>{user.username}</option>
+                  <option key={user.id} value={user.id}>
+                    {user.username}
+                  </option>
                 ))}
               </select>
             </div>
@@ -351,7 +348,7 @@ export default function AdminEmployeesPage() {
             </div>
           </div>
 
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div className="mt-5 flex flex-col gap-2 sm:flex-row">
             <div className="relative w-full sm:min-w-72 sm:flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -373,30 +370,30 @@ export default function AdminEmployeesPage() {
 
               return (
                 <article key={employee.id} className="rounded-2xl border border-border/60 bg-muted/15 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <h4 className="font-semibold">{employee.full_name}</h4>
-                      <p className="text-sm text-muted-foreground">{employee.position} · {employee.email}</p>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <h4 className="break-words font-semibold">{employee.full_name}</h4>
+                      <p className="text-sm text-muted-foreground break-words">{employee.position} · {employee.email}</p>
                       <p className="mt-1 text-xs text-muted-foreground">Отдел: {employee.department_name || "не назначен"}</p>
                       <p className="mt-1 text-xs text-muted-foreground">Руководитель: {employee.manager_name || "не назначен"}</p>
                     </div>
 
-                    <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                    <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2">
                       {!isEditing ? (
                         <>
-                          <Button className="w-full sm:w-auto" size="sm" onClick={() => startEdit(employee)}>
+                          <Button className="w-full" size="sm" onClick={() => startEdit(employee)}>
                             Редактировать
                           </Button>
-                          <Button className="w-full sm:w-auto" size="sm" variant="destructive" onClick={() => void deleteEmployee(employee)}>
+                          <Button className="w-full" size="sm" variant="destructive" onClick={() => void deleteEmployee(employee)}>
                             Удалить
                           </Button>
                         </>
                       ) : (
                         <>
-                          <Button className="w-full sm:w-auto" size="sm" onClick={() => void saveEdit(employee.id)}>
+                          <Button className="w-full" size="sm" onClick={() => void saveEdit(employee.id)}>
                             Сохранить
                           </Button>
-                          <Button className="w-full sm:w-auto" size="sm" variant="outline" onClick={cancelEdit}>
+                          <Button className="w-full" size="sm" variant="outline" onClick={cancelEdit}>
                             Отмена
                           </Button>
                         </>
@@ -434,7 +431,6 @@ export default function AdminEmployeesPage() {
                       Конец отпуска
                       <Input disabled={!isEditing} className="mt-1" type="date" value={currentForm.vacation_end} onChange={(e) => handleEditFormChange("vacation_end", e.target.value)} />
                     </label>
-                    <div />
                   </div>
 
                   <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -446,7 +442,9 @@ export default function AdminEmployeesPage() {
                     >
                       <option value="">Отдел не выбран</option>
                       {departments.map((department) => (
-                        <option key={department.id} value={department.id}>{department.name}</option>
+                        <option key={department.id} value={department.id}>
+                          {department.name}
+                        </option>
                       ))}
                     </select>
 
@@ -458,7 +456,9 @@ export default function AdminEmployeesPage() {
                     >
                       <option value="">Учётная запись не привязана</option>
                       {availableUsersForEmployee(employee).map((user) => (
-                        <option key={user.id} value={user.id}>{user.username}</option>
+                        <option key={user.id} value={user.id}>
+                          {user.username}
+                        </option>
                       ))}
                     </select>
                   </div>

@@ -15,23 +15,43 @@ from app.knowledge.schemas import (
     KnowledgeCategoryCreate,
     KnowledgeCategoryUpdate,
 )
+from app.users.models import User, UserRole
 
 
-async def get_knowledge_categories(db: AsyncSession) -> list[KnowledgeCategory]:
-    stmt = select(KnowledgeCategory).order_by(KnowledgeCategory.sort_order, KnowledgeCategory.name)
+def _can_manage_knowledge(user: User) -> bool:
+    return user.role in {UserRole.admin, UserRole.it_specialist}
+
+
+async def get_knowledge_categories(
+    db: AsyncSession,
+    current_user: User,
+) -> list[KnowledgeCategory]:
+    stmt = select(KnowledgeCategory)
+
+    if not _can_manage_knowledge(current_user):
+        stmt = stmt.where(KnowledgeCategory.is_user_visible.is_(True))
+
+    stmt = stmt.order_by(KnowledgeCategory.sort_order, KnowledgeCategory.name)
     result = await db.execute(stmt)
     return list(result.scalars().all())
 
 
-async def get_knowledge_category_by_id(db: AsyncSession, cat_id: UUID) -> KnowledgeCategory | None:
+async def get_knowledge_category_by_id(
+    db: AsyncSession,
+    cat_id: UUID,
+) -> KnowledgeCategory | None:
     result = await db.execute(select(KnowledgeCategory).where(KnowledgeCategory.id == cat_id))
     return result.scalar_one_or_none()
 
 
-async def create_knowledge_category(db: AsyncSession, data: KnowledgeCategoryCreate) -> KnowledgeCategory:
+async def create_knowledge_category(
+    db: AsyncSession,
+    data: KnowledgeCategoryCreate,
+) -> KnowledgeCategory:
     category = KnowledgeCategory(
         name=data.name.strip(),
         sort_order=data.sort_order,
+        is_user_visible=data.is_user_visible,
     )
     db.add(category)
     await db.commit()
@@ -57,24 +77,40 @@ async def update_knowledge_category(
     return category
 
 
-async def delete_knowledge_category(db: AsyncSession, category: KnowledgeCategory) -> None:
+async def delete_knowledge_category(
+    db: AsyncSession,
+    category: KnowledgeCategory,
+) -> None:
     await db.delete(category)
     await db.commit()
 
 
 async def get_articles(
     db: AsyncSession,
+    current_user: User,
     page: int = 1,
     size: int = 20,
     category_id: UUID | None = None,
     search: str | None = None,
 ) -> tuple[list[KnowledgeArticle], int]:
-    stmt = select(KnowledgeArticle).options(
-        selectinload(KnowledgeArticle.category),
-        selectinload(KnowledgeArticle.author),
-        selectinload(KnowledgeArticle.attachments),
+    stmt = (
+        select(KnowledgeArticle)
+        .join(KnowledgeCategory, KnowledgeArticle.category_id == KnowledgeCategory.id)
+        .options(
+            selectinload(KnowledgeArticle.category),
+            selectinload(KnowledgeArticle.author),
+            selectinload(KnowledgeArticle.attachments),
+        )
     )
-    count_stmt = select(func.count()).select_from(KnowledgeArticle)
+    count_stmt = (
+        select(func.count())
+        .select_from(KnowledgeArticle)
+        .join(KnowledgeCategory, KnowledgeArticle.category_id == KnowledgeCategory.id)
+    )
+
+    if not _can_manage_knowledge(current_user):
+        stmt = stmt.where(KnowledgeCategory.is_user_visible.is_(True))
+        count_stmt = count_stmt.where(KnowledgeCategory.is_user_visible.is_(True))
 
     if category_id is not None:
         stmt = stmt.where(KnowledgeArticle.category_id == category_id)
@@ -96,9 +132,14 @@ async def get_articles(
     return list(result.scalars().unique().all()), total
 
 
-async def get_article_by_id(db: AsyncSession, article_id: UUID) -> KnowledgeArticle | None:
+async def get_article_by_id(
+    db: AsyncSession,
+    article_id: UUID,
+    current_user: User,
+) -> KnowledgeArticle | None:
     stmt = (
         select(KnowledgeArticle)
+        .join(KnowledgeCategory, KnowledgeArticle.category_id == KnowledgeCategory.id)
         .options(
             selectinload(KnowledgeArticle.category),
             selectinload(KnowledgeArticle.author),
@@ -106,11 +147,19 @@ async def get_article_by_id(db: AsyncSession, article_id: UUID) -> KnowledgeArti
         )
         .where(KnowledgeArticle.id == article_id)
     )
+
+    if not _can_manage_knowledge(current_user):
+        stmt = stmt.where(KnowledgeCategory.is_user_visible.is_(True))
+
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
 
-async def create_article(db: AsyncSession, data: ArticleCreate, author_id: UUID) -> KnowledgeArticle:
+async def create_article(
+    db: AsyncSession,
+    data: ArticleCreate,
+    author_id: UUID,
+) -> KnowledgeArticle:
     category = await get_knowledge_category_by_id(db, data.category_id)
     if category is None:
         raise ValueError("Related record not found or invalid reference")
@@ -157,6 +206,9 @@ async def update_article(
     return article
 
 
-async def delete_article(db: AsyncSession, article: KnowledgeArticle) -> None:
+async def delete_article(
+    db: AsyncSession,
+    article: KnowledgeArticle,
+) -> None:
     await db.delete(article)
     await db.commit()

@@ -74,9 +74,9 @@ def _article_to_read(article) -> ArticleRead:
 @router.get("/categories", response_model=list[KnowledgeCategoryRead])
 async def list_categories(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> list[KnowledgeCategoryRead]:
-    return await get_knowledge_categories(db)
+    return await get_knowledge_categories(db, current_user)
 
 
 @router.post("/categories", response_model=KnowledgeCategoryRead, status_code=status.HTTP_201_CREATED)
@@ -120,10 +120,11 @@ async def list_articles(
     category_id: UUID | None = Query(None),
     search: str | None = Query(None, max_length=300),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> ArticleListResponse:
     articles, total = await get_articles(
         db,
+        current_user=current_user,
         page=page,
         size=size,
         category_id=category_id,
@@ -141,9 +142,9 @@ async def list_articles(
 async def read_article(
     article_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> ArticleRead:
-    article = await get_article_by_id(db, article_id)
+    article = await get_article_by_id(db, article_id, current_user)
     if article is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Article not found")
     return _article_to_read(article)
@@ -156,7 +157,7 @@ async def create_new_article(
     current_user: User = Depends(require_it),
 ) -> ArticleRead:
     article = await create_article(db, body, current_user.id)
-    article = await get_article_by_id(db, article.id)
+    article = await get_article_by_id(db, article.id, current_user)
     if article is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -170,14 +171,14 @@ async def update_existing_article(
     article_id: UUID,
     body: ArticleUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_it),
+    current_user: User = Depends(require_it),
 ) -> ArticleRead:
-    article = await get_article_by_id(db, article_id)
+    article = await get_article_by_id(db, article_id, current_user)
     if article is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Article not found")
 
     article = await update_article(db, article, body)
-    article = await get_article_by_id(db, article.id)
+    article = await get_article_by_id(db, article.id, current_user)
     if article is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -191,9 +192,9 @@ async def update_existing_article(
 async def remove_article(
     article_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_it),
+    current_user: User = Depends(require_it),
 ) -> None:
-    article = await get_article_by_id(db, article_id)
+    article = await get_article_by_id(db, article_id, current_user)
     if article is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Article not found")
     await delete_article(db, article)
